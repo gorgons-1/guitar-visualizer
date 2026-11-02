@@ -1,0 +1,40 @@
+# Manual test build: builds installers WITHOUT creating a release.
+# Run it from the Actions tab ("Test build" → "Run workflow") or with:  gh workflow run test-build.yml
+# Download the installers from the run page under "Artifacts". Users are never notified.
+name: Test build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+            files: dist/*.exe
+          - os: macos-latest
+            name: macos
+            files: dist/*.dmg
+          - os: ubuntu-latest
+            name: linux
+            files: dist/*.AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Build installers (no upload to releases)
+        run: npx electron-builder --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: guitar-visualizer-${{ matrix.name }}
+          path: ${{ matrix.files }}
+          retention-days: 14
