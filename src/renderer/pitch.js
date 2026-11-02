@@ -62,6 +62,22 @@
       tau = best;
     }
 
+    // Octave check: low guitar strings (especially through a mic) often have a weak
+    // fundamental, so the first dip can be an overtone. If a period 2x/3x/4x longer
+    // fits clearly better, it is the real note.
+    const base = tau;
+    for (let k = 2; k <= 4; k++) {
+      const centre = base * k;
+      if (centre > tauMax) break;
+      const lo = Math.max(tauMin, Math.floor(centre - 2 * k));
+      const hi = Math.min(tauMax, Math.ceil(centre + 2 * k));
+      let best = lo;
+      for (let t = lo + 1; t <= hi; t++) if (d[t] < d[best]) best = t;
+      // Must be clearly better: half the error AND a real gap (a true high note fits its
+      // own period almost perfectly, so its multiples are never much better).
+      if (d[best] < d[base] * 0.3 && d[base] - d[best] > 0.02 && d[best] <= d[tau]) tau = best;
+    }
+
     // Parabolic interpolation for sub-sample accuracy.
     let better = tau;
     if (tau > 1 && tau < tauMax) {
