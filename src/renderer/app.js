@@ -9,7 +9,7 @@
   const DEFAULTS = {
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, tempo: 120,
-    device: '', channel: 'mix', monitor: false, sensitivity: 60,
+    device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false,
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -22,7 +22,9 @@
   let voicingIndex = 0;
   let voicingCache = { key: '', list: [] };
   let liveMidi = null;
-  let playingMidis = new Set();
+  let livePos = null; // best-guess {s, f} for the note being played
+  let handPos = null; // last position played; used to guess where the hand is
+  let playingMarks = []; // [{s, f}] highlighted during playback
 
   const synth = new Synth();
   const input = new LiveInput(() => synth.context());
@@ -142,7 +144,7 @@
         const cx = X(noteX(f)), cy = sy(s);
 
         const hit = el('circle', { cx, cy, r: 14, class: 'hit' }, svg);
-        hit.addEventListener('mousedown', () => playNote(midi));
+        hit.addEventListener('mousedown', () => playNote(midi, { s, f }));
         el('title', {}, hit).textContent = T.noteNameWithOctave(midi, state.flats);
 
         if (!pcSet.has(p)) continue;
@@ -168,16 +170,28 @@
   function drawOverlay() {
     if (!liveLayer || !geom) return;
     liveLayer.innerHTML = '';
-    const tun = tuning();
-    const ring = (midi, cls) => {
-      tun.forEach((open, s) => {
-        const f = midi - open;
-        if (f < 0 || f > state.frets) return;
-        el('circle', { cx: geom.X(geom.noteX(f)), cy: geom.sy(s), r: 15, class: 'ring ' + cls }, liveLayer);
-      });
-    };
-    for (const m of playingMidis) ring(m, 'playing');
-    if (liveMidi !== null) ring(liveMidi, 'live');
+    const mark = (p, cls) =>
+      el('circle', { cx: geom.X(geom.noteX(p.f)), cy: geom.sy(p.s), r: 15, class: 'ring ' + cls }, liveLayer);
+    playingMarks.forEach((p) => mark(p, 'playing'));
+    if (liveMidi !== null) {
+      const list = state.showAllLive ? positionsOf(liveMidi) : livePos ? [livePos] : [];
+      list.forEach((p) => mark(p, 'live'));
+    }
+  }
+
+  /** Every place on the neck where this exact pitch can be played. */
+  function positionsOf(midi) {
+    return tuning()
+      .map((open, s) => ({ s, f: midi - open }))
+      .filter((p) => p.f >= 0 && p.f <= state.frets);
+  }
+
+  /** Most likely place this pitch was played: nearest to the previous note, else lowest fret. */
+  function bestPosition(midi, near) {
+    const options = positionsOf(midi);
+    if (!options.length) return null;
+    const cost = (p) => (near ? Math.abs(p.f - near.f) + 0.6 * Math.abs(p.s - near.s) : p.f);
+    return options.reduce((a, b) => (cost(b) < cost(a) ? b : a));
   }
 
   // ---------------- Side panel ----------------
@@ -230,22 +244,22 @@
     playTimers.forEach(clearTimeout);
     playTimers = [];
     synth.stopAll();
-    playingMidis = new Set();
+    playingMarks = [];
     drawOverlay();
   }
 
-  function flash(midis, ms) {
-    midis.forEach((m) => playingMidis.add(m));
+  function flash(marks, ms) {
+    playingMarks = playingMarks.concat(marks);
     drawOverlay();
     playTimers.push(setTimeout(() => {
-      midis.forEach((m) => playingMidis.delete(m));
+      playingMarks = playingMarks.filter((p) => !marks.includes(p));
       drawOverlay();
     }, ms));
   }
 
-  function playNote(midi) {
+  function playNote(midi, pos) {
     synth.play(midi);
-    flash([midi], 400);
+    flash([pos], 400);
   }
 
   function playCurrent() {
@@ -254,24 +268,27 @@
     if (state.mode === 'chord') {
       const v = currentVoicing();
       if (!v) return;
-      const midis = v.map((f, s) => (f === null ? null : tuning()[s] + f)).filter((m) => m !== null);
-      midis.forEach((m, i) => synth.play(m, i * 0.035, 0.5));
-      flash(midis, 1500);
+      const marks = v.map((f, s) => (f === null ? null : { s, f })).filter(Boolean);
+      marks.forEach((p, i) => synth.play(tuning()[p.s] + p.f, i * 0.035, 0.5));
+      flash(marks, 1500);
       return;
     }
     const seq = state.mode === 'scale'
       ? T.buildRun(tuning(), state.root, activePcs(), 1)
       : T.buildRun(tuning(), state.root, activePcs(), 2);
     const step = beat / 2; // eighth notes
+    let near = null;
     seq.forEach((m, i) => {
+      const pos = bestPosition(m, near);
+      near = pos || near;
       synth.play(m, i * step);
       playTimers.push(setTimeout(() => {
-        playingMidis = new Set([m]);
+        playingMarks = pos ? [pos] : [];
         drawOverlay();
       }, i * step * 1000));
     });
     playTimers.push(setTimeout(() => {
-      playingMidis = new Set();
+      playingMarks = [];
       drawOverlay();
     }, seq.length * step * 1000 + 300));
   }
@@ -300,6 +317,7 @@
     candidate = null;
     if (liveMidi !== null) {
       liveMidi = null;
+      livePos = null;
       drawOverlay();
     }
     $('detected-note').textContent = '–';
@@ -331,6 +349,8 @@
     else { candidate = nearest; candidateCount = 1; }
     if (candidateCount >= 2 && nearest !== liveMidi) {
       liveMidi = nearest;
+      livePos = bestPosition(liveMidi, handPos);
+      if (livePos) handPos = livePos;
       drawOverlay();
     }
     if (liveMidi === null) return;
@@ -447,6 +467,8 @@
     $('tempo-val').textContent = state.tempo;
     $('channel').value = state.channel;
     $('monitor').checked = state.monitor;
+    $('show-all-live').checked = state.showAllLive;
+    $('show-all-live').onchange = (e) => { state.showAllLive = e.target.checked; save(); drawOverlay(); };
     $('sensitivity').value = state.sensitivity;
 
     const bind = (id, key, parse = (v) => v, after) => {
