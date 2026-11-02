@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob: mediastream:">
+  <title>Guitar Visualizer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="update-banner" class="banner hidden" role="status">
+    <span id="update-text"></span>
+    <button id="update-action"></button>
+    <button id="update-dismiss" class="ghost" title="Remind me later">Later</button>
+  </div>
+
+  <header class="toolbar">
+    <div class="group">
+      <label>Mode
+        <select id="mode">
+          <option value="scale">Scale</option>
+          <option value="chord">Chord</option>
+          <option value="arpeggio">Arpeggio</option>
+        </select>
+      </label>
+      <label>Root <select id="root"></select></label>
+      <label id="scale-wrap">Scale <select id="scale"></select></label>
+      <label id="chord-wrap">Chord <select id="chord"></select></label>
+    </div>
+    <div class="group">
+      <label>Tuning <select id="tuning"></select></label>
+      <label>Frets
+        <select id="frets">
+          <option>12</option><option>15</option><option>17</option>
+          <option>21</option><option>22</option><option>24</option>
+        </select>
+      </label>
+      <label>Labels
+        <select id="labels">
+          <option value="notes">Notes</option>
+          <option value="intervals">Intervals</option>
+          <option value="none">None</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="flats"> Flats</label>
+      <label class="check"><input type="checkbox" id="lefty"> Left-handed</label>
+    </div>
+  </header>
+
+  <main>
+    <section class="board-wrap">
+      <svg id="fretboard" role="img" aria-label="Guitar fretboard"></svg>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <section class="panels">
+      <div class="card">
+        <h2 id="title"></h2>
+        <div id="notes-list" class="chips"></div>
+        <div id="voicing-nav" class="row">
+          <button id="prev" title="Previous voicing">&#9664;</button>
+          <span id="voicing-label"></span>
+          <button id="next" title="Next voicing">&#9654;</button>
+        </div>
+        <div class="row">
+          <button id="play" class="primary">&#9654; Play</button>
+          <label class="inline">Tempo
+            <input type="range" id="tempo" min="40" max="240" step="5">
+            <span id="tempo-val"></span> BPM
+          </label>
+        </div>
+        <p class="hint">Tip: click any fret to hear that note.</p>
+      </div>
+
+      <div class="card">
+        <h2>Live input</h2>
+        <div class="row">
+          <label class="grow">Input device <select id="device"></select></label>
+          <button id="refresh-devices" class="ghost" title="Refresh device list">&#8635;</button>
+        </div>
+        <div class="row">
+          <label>Channel
+            <select id="channel">
+              <option value="mix">Mix (all)</option>
+              <option value="0">Input 1 / Left</option>
+              <option value="1">Input 2 / Right</option>
+            </select>
+          </label>
+          <label class="inline">Sensitivity
+            <input type="range" id="sensitivity" min="0" max="100">
+          </label>
+        </div>
+        <label class="check"><input type="checkbox" id="monitor"> Monitor input through speakers (use headphones)</label>
+        <div class="row">
+          <button id="listen" class="primary">&#127908; Start listening</button>
+          <div class="meter" title="Input level"><div id="level"></div></div>
+        </div>
+        <div class="tuner">
+          <div id="detected-note" class="big">&ndash;</div>
+          <div id="detected-freq" class="muted"></div>
+          <div class="needle-track"><div class="center"></div><div id="needle"></div></div>
+          <div id="cents" class="muted"></div>
+          <div id="in-key"></div>
+        </div>
+        <p id="input-error" class="error"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span id="version"></span>
+    <button id="check-updates" class="ghost">Check for updates</button>
+    <span id="update-status" class="muted"></span>
+  </footer>
+
+  <script src="theory.js"></script>
+  <script src="pitch.js"></script>
+  <script src="audio.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
