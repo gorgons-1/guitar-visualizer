@@ -297,6 +297,35 @@
   // ---------------- Live input ----------------
   const sensitivityToThreshold = (s) => 0.05 * Math.pow(0.02, s / 100);
   const gate = new window.NoteGate({ guitarOnly: state.guitarOnly });
+  const diag = [];
+  let diagInfo = {};
+  let deviceLabel = '';
+
+  async function copyDiagnostics() {
+    const t0 = diag.length ? diag[0].t : 0;
+    const n = (x, d = 3) => (x > 0 ? x.toFixed(d) : '-');
+    const lines = [
+      `Guitar Visualizer diagnostics  v${$('version').textContent.replace('v', '') || '?'}`,
+      `device="${deviceLabel}" channel=${state.channel} guitarOnly=${state.guitarOnly} sensitivity=${state.sensitivity} gate=${n(gate.threshold, 4)}`,
+      `tuning=${state.tuning} sampleRate=${diagInfo.sampleRate} window=${diagInfo.fftSize}`,
+      'ms     level  attack  freq     note  clarity onset decision        shown',
+      ...diag.map((d) => [
+        String(d.t - t0).padStart(5), n(d.lv, 4).padStart(6), n(d.al, 4).padStart(7),
+        n(d.f, 1).padStart(7), (d.f > 0 ? T.noteNameWithOctave(T.freqToMidi(d.f)) : '-').padStart(5),
+        n(d.c, 2).padStart(7), (d.on ? '  *  ' : '     '), d.why.padEnd(15),
+        d.shown === null ? '-' : T.noteNameWithOctave(d.shown),
+      ].join(' ')),
+    ];
+    try {
+      const text = lines.join('\n');
+      if (window.appApi && window.appApi.copyText) await window.appApi.copyText(text);
+      else await navigator.clipboard.writeText(text);
+      $('diag-status').textContent = 'Copied! Paste it into the chat.';
+    } catch (err) {
+      $('diag-status').textContent = 'Could not copy: ' + err.message;
+    }
+    setTimeout(() => { $('diag-status').textContent = ''; }, 4000);
+  }
   const setThreshold = () => {
     input.threshold = gate.threshold = sensitivityToThreshold(state.sensitivity);
   };
@@ -315,8 +344,9 @@
     }
   }
 
+  // Clears the display only. (Never reset the gate here: when a note fades out at the same
+  // moment the next string is plucked, resetting would throw that pluck away.)
   function clearDetected() {
-    gate.reset();
     if (liveMidi !== null) {
       liveMidi = null;
       livePos = null;
@@ -335,7 +365,14 @@
     const db = 20 * Math.log10(frame.level || 1e-6);
     $('level').style.width = Math.max(0, Math.min(100, ((db + 60) / 60) * 100)) + '%';
 
-    const note = gate.push(frame, performance.now());
+    const now = performance.now();
+    const note = gate.push(frame, now);
+    diag.push({
+      t: Math.round(now), lv: frame.level, al: frame.attackLevel, f: frame.freq, c: frame.clarity,
+      on: gate.onset, why: gate.reason || '', shown: note ? note.midi : null,
+    });
+    if (diag.length > 200) diag.shift(); // ~4 seconds
+    diagInfo = { sampleRate: frame.sampleRate, fftSize: frame.fftSize };
     if (!note) {
       if (liveMidi !== null) clearDetected();
       return;
@@ -364,7 +401,7 @@
     $('input-error').textContent = '';
     const tun = tuning();
     try {
-      await input.start({
+      deviceLabel = await input.start({
         deviceId: state.device,
         channel: state.channel,
         monitor: state.monitor,
@@ -388,6 +425,7 @@
     input.stop();
     $('listen').textContent = '🎤 Start listening';
     $('level').style.width = '0%';
+    gate.reset();
     clearDetected();
   }
 
@@ -464,7 +502,7 @@
     $('channel').value = state.channel;
     $('monitor').checked = state.monitor;
     $('guitar-only').checked = state.guitarOnly;
-    $('guitar-only').onchange = (e) => { state.guitarOnly = gate.guitarOnly = e.target.checked; save(); clearDetected(); };
+    $('guitar-only').onchange = (e) => { state.guitarOnly = gate.guitarOnly = e.target.checked; save(); gate.reset(); clearDetected(); };
     $('show-all-live').checked = state.showAllLive;
     $('show-all-live').onchange = (e) => { state.showAllLive = e.target.checked; save(); drawOverlay(); };
     $('sensitivity').value = state.sensitivity;
@@ -500,6 +538,7 @@
       save();
     };
     $('refresh-devices').onclick = refreshDevices;
+    $('copy-diag').onclick = copyDiagnostics;
     $('listen').onclick = () => (input.active ? stopListening() : startListening());
     navigator.mediaDevices.addEventListener('devicechange', refreshDevices);
 

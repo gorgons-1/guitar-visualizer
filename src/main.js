@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, session, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, clipboard, ipcMain, session, shell, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -93,6 +93,7 @@ function setupUpdater() {
   autoUpdater.on('error', (err) => send('update:status', { state: 'error', message: err?.message || String(err) }));
 
   ipcMain.handle('app:version', () => app.getVersion());
+  ipcMain.handle('clipboard:write', (_e, text) => clipboard.writeText(String(text).slice(0, 200000)));
   ipcMain.handle('update:check', () => checkForUpdates());
   ipcMain.handle('update:download', async () => {
     if (MANUAL_UPDATE) {

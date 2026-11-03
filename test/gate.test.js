@@ -7,7 +7,7 @@ const NoteGate = require('../src/renderer/gate.js');
 const SR = 48000;
 const WINDOW = 2048; // analyser size used by the app
 const HOP = 960; // app analyses every 20 ms
-const ATTACK = 512; // newest samples used for pluck detection
+const ATTACK = 1024; // newest samples used for pluck detection
 
 let seed = 7;
 const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
@@ -143,6 +143,40 @@ test('soft picking is detected', () => {
 test('fast runs: every note is shown, in order', () => {
   const run5 = [[0.3, 110], [0.45, 123.47], [0.6, 130.81], [0.75, 146.83], [0.9, 164.81]];
   assert.deepEqual(timeline(phrase(run5, 1.5)).map((e) => e.midi), [45, 47, 48, 50, 52]);
+});
+
+// Realistic string: per-overtone decay, slightly sharp (stiff) overtones.
+function realString(freq, start, seconds, B = 0.0002) {
+  const out = new Float32Array(Math.floor(SR * seconds));
+  const amps = [0.35, 0.7, 0.5, 0.45, 0.35, 0.3, 0.2, 0.15];
+  const st = Math.floor(SR * start);
+  for (let i = st; i < out.length; i++) {
+    const t = (i - st) / SR;
+    let v = 0;
+    amps.forEach((a, k) => {
+      const n = k + 1;
+      v += a * Math.exp(-t * (1.2 + 0.9 * n)) * Math.sin(2 * Math.PI * n * freq * Math.sqrt(1 + B * n * n) * t + k);
+    });
+    out[i] = v * 0.3;
+  }
+  return out;
+}
+
+test('bass strings: next pluck is caught while the previous bass note still rings', () => {
+  // low E rings, then A, then D, each plucked while the last is still sounding
+  const audio = mix(mix(realString(82.41, 0.3, 3), realString(110, 1.3, 3)), realString(146.83, 2.3, 3));
+  const events = timeline(audio);
+  for (const [midi, at] of [[40, 0.3], [45, 1.3], [50, 2.3]]) {
+    const e = events.find((x) => x.midi === midi && x.t >= at);
+    assert.ok(e, `note ${midi} not shown (got ${JSON.stringify(events)})`);
+    assert.ok(e.t - at <= 0.15, `note ${midi} took ${Math.round((e.t - at) * 1000)} ms`);
+  }
+});
+
+test('bass strings: same string plucked twice is caught both times', () => {
+  const audio = mix(realString(82.41, 0.3, 2.5), realString(110, 1.3, 2.5));
+  const events = timeline(audio);
+  assert.deepEqual(events.map((e) => e.midi), [40, 45]);
 });
 
 test('with the filter off, voices are picked up (filter is what blocks them)', () => {

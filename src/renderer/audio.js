@@ -124,12 +124,13 @@
       this.timer = setInterval(() => {
         this.analyser.getFloatTimeDomainData(buf);
         const level = window.Pitch.rms(buf);
-        // Level of only the newest ~10 ms, so a pick attack shows up as a sudden jump.
-        const attackLevel = window.Pitch.rms(buf.subarray(buf.length - 512));
+        // Level of only the newest ~21 ms, so a pick attack shows up as a sudden jump.
+        // (Must be longer than one cycle of the low E, ~12 ms, or the level flickers.)
+        const attackLevel = window.Pitch.rms(buf.subarray(buf.length - 1024));
         const { freq, clarity } = level >= this.threshold * 0.5 // keep following a note as it fades
           ? window.Pitch.analyze(buf, sr, { minFreq, maxFreq })
           : { freq: -1, clarity: 0 };
-        onFrame({ level, attackLevel, freq, clarity });
+        onFrame({ level, attackLevel, freq, clarity, sampleRate: sr, fftSize: buf.length });
       }, 20);
 
       const track = this.stream.getAudioTracks()[0];
