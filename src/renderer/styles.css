@@ -134,3 +134,25 @@ footer { display: flex; gap: 12px; align-items: center; padding: 6px 16px; backg
 .ring.next1 { stroke-opacity: .8; } .ring.next2 { stroke-opacity: .55; } .ring.next3 { stroke-opacity: .35; }
 .next-num { fill: var(--good); font-size: 12px; font-weight: 700; text-anchor: middle; pointer-events: none; }
 .next-num.now { fill: #fff; }
+
+/* Tab player */
+.card.wide { grid-column: 1 / -1; }
+code { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--panel-2); padding: 0 4px; border-radius: 4px; }
+#tab-text {
+  width: 100%; resize: vertical; background: var(--panel-2); color: var(--text); border: 1px solid #3a3f49;
+  border-radius: 6px; padding: 8px; font: 13px/1.35 ui-monospace, Menlo, Consolas, monospace;
+}
+#tab-controls { display: flex; flex-direction: column; gap: 10px; }
+.tab-view { max-height: 260px; overflow: auto; background: #101216; border-radius: 8px; padding: 8px 10px; }
+.tab-sys { margin: 0 0 10px; font: 14px/1.25 ui-monospace, Menlo, Consolas, monospace; white-space: pre; color: #b9b4aa; }
+.tab-sys .lbl { color: var(--muted); }
+.tab-sys .ev { cursor: pointer; border-radius: 2px; }
+.tab-sys .ev:hover { background: rgba(255, 255, 255, .1); }
+.tab-sys .ev.done { color: #6c7078; }
+.tab-sys .ev.cur { background: var(--good); color: #0c1a10; font-weight: 700; }
+.tab-sys .ev.soon { background: rgba(95, 211, 141, .18); color: var(--text); }
+#tab-feedback { min-height: 1.4em; font-weight: 600; }
+#tab-feedback.yes { color: var(--good); }
+#tab-feedback.no { color: var(--bad); }
+.dot.tabnow { fill: var(--good); }
+.tech { fill: var(--accent); font-size: 11px; font-weight: 700; text-anchor: middle; pointer-events: none; }

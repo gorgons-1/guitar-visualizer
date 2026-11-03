@@ -54,6 +54,38 @@
     </section>
 
     <section class="panels">
+      <div class="card wide" id="tab-card">
+        <h2>Tab player</h2>
+        <p class="hint">Paste a guitar tab (the text kind, with a line per string like <code>e|---0---3---|</code>) or open a .txt tab file. Each step is shown on the neck, with the next few numbered.</p>
+        <div class="row">
+          <button id="tab-open">&#128194; Open tab file&hellip;</button>
+          <input type="file" id="tab-file" accept=".txt,.tab,.crd,text/plain" class="hidden">
+          <button id="tab-paste">&#128203; Paste tab</button>
+          <button id="tab-example" class="ghost">Load example</button>
+          <button id="tab-close" class="ghost hidden">Close tab</button>
+        </div>
+        <div id="tab-paste-box" class="hidden">
+          <textarea id="tab-text" rows="8" spellcheck="false" placeholder="e|-------0-----|&#10;B|-----1-------|&#10;G|---2---------|&#10;D|-2-----------|&#10;A|-0-----------|&#10;E|-------------|"></textarea>
+          <div class="row"><button id="tab-load" class="primary">Show on neck</button></div>
+        </div>
+        <div id="tab-status" class="muted"></div>
+        <div id="tab-controls" class="hidden">
+          <div class="row">
+            <button id="tab-start" title="Back to the start">&laquo; Start</button>
+            <button id="tab-prev" title="Previous step (&larr;)">&#9664;</button>
+            <button id="tab-play" class="primary" title="Play / pause (Space)">&#9654; Play</button>
+            <button id="tab-next" title="Next step (&rarr;)">&#9654;</button>
+            <span id="tab-pos" class="muted"></span>
+            <label class="inline">Speed <input type="range" id="tab-speed" min="25" max="200" step="5"> <span id="tab-speed-val"></span>%</label>
+            <label class="check"><input type="checkbox" id="tab-loop"> Loop</label>
+            <label class="check" title="Listens to your guitar and moves on when you play the right note"><input type="checkbox" id="tab-follow"> &#127908; Wait for me to play each step</label>
+          </div>
+          <div id="tab-now" class="target-text"></div>
+          <div id="tab-feedback"></div>
+          <div id="tab-view" class="tab-view"></div>
+        </div>
+      </div>
+
       <div class="card">
         <h2 id="title"></h2>
         <div id="notes-list" class="chips"></div>
@@ -166,6 +198,7 @@
   <script src="gate.js"></script>
   <script src="timbre.js"></script>
   <script src="chord.js"></script>
+  <script src="tab.js"></script>
   <script src="audio.js"></script>
   <script src="app.js"></script>
 </body>
