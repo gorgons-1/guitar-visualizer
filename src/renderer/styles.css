@@ -149,6 +149,9 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--
 .tab-sys .ev { cursor: pointer; border-radius: 2px; }
 .tab-sys .ev:hover { background: rgba(255, 255, 255, .1); }
 .tab-sys .ev.done { color: #6c7078; }
+.tab-sys .ev.hit { background: rgba(95, 211, 141, .35); color: var(--text); }
+.tab-sys .ev.miss { background: rgba(239, 107, 107, .4); color: var(--text); }
+#tab-score { font-weight: 600; }
 .tab-sys .ev.cur { background: var(--good); color: #0c1a10; font-weight: 700; }
 .tab-sys .ev.soon { background: rgba(95, 211, 141, .18); color: var(--text); }
 #tab-feedback { min-height: 1.4em; font-weight: 600; }

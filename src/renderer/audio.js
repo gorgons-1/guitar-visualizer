@@ -62,6 +62,21 @@
       src.onended = () => this.active.delete(src);
     }
 
+    /** Metronome click (count-in). */
+    click(accent = false, delay = 0) {
+      const ctx = this.context();
+      const t = ctx.currentTime + delay;
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.frequency.value = accent ? 1600 : 1100;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(accent ? 0.6 : 0.4, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+      osc.connect(g).connect(this.master);
+      osc.start(t);
+      osc.stop(t + 0.08);
+    }
+
     stopAll() {
       for (const src of this.active) {
         try { src.stop(); } catch { /* already stopped */ }

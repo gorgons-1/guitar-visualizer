@@ -10,7 +10,7 @@
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, tempo: 120,
     device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
-    practiceType: 'find', useStrings: false, calib: {}, checkChord: false, tabSpeed: 100, tabLoop: false,
+    practiceType: 'find', useStrings: false, calib: {}, checkChord: false, tabSpeed: 100, tabLoop: false, countIn: true, alongSound: false,
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -629,7 +629,8 @@
   }
 
   // ---------------- Tab player ----------------
-  const tab = { song: null, text: '', idx: 0, playing: false, timer: null, follow: false, lastWrongAt: 0, chordOnset: -Infinity, mistakes: 0 };
+  const tab = { song: null, text: '', idx: 0, playing: false, timer: null, follow: false, lastWrongAt: 0, chordOnset: -Infinity, mistakes: 0,
+    along: false, counting: false, results: [], best: 0, pass: 0 };
   const tabShown = () => !!(tab.song && tab.song.events.length);
   /** The neck shows the tab (not the scale) unless practice or calibration is running. */
   const tabView = () => tabShown() && !practice.on && !cal.active;
@@ -797,7 +798,9 @@ E|---------3-------3-------0-------|
       const i = Number(node.dataset.e);
       node.classList.toggle('cur', i === tab.idx);
       node.classList.toggle('soon', i > tab.idx && i <= tab.idx + 3);
-      node.classList.toggle('done', i < tab.idx);
+      node.classList.toggle('done', i < tab.idx && !tab.results[i]);
+      node.classList.toggle('hit', tab.results[i] === 'hit' && i !== tab.idx);
+      node.classList.toggle('miss', tab.results[i] === 'miss' && i !== tab.idx);
     });
     const cur = view.querySelector('.ev.cur');
     if (cur) {
@@ -811,7 +814,8 @@ E|---------3-------3-------0-------|
     const shown = tabShown();
     $('tab-controls').classList.toggle('hidden', !shown);
     $('tab-close').classList.toggle('hidden', !shown);
-    $('tab-play').textContent = tab.playing ? '❚❚ Pause' : '▶ Play';
+    $('tab-play').textContent = tab.playing && !tab.along ? '❚❚ Pause' : '▶ Play';
+    $('tab-along').textContent = tab.along ? '■ Stop' : '🎯 Play along';
   }
 
   function updateTabStep() {
@@ -841,8 +845,11 @@ E|---------3-------3-------0-------|
     clearTimeout(tab.timer);
     tab.timer = null;
     tab.playing = false;
+    if (tab.along) { tab.along = false; tab.counting = false; showScore(false); }
     if (tab.song) updateTabUi();
   }
+
+  const colMs = () => (90 * 100) / state.tabSpeed; // one "-" of tab
 
   function playTab() {
     if (!tabShown()) return;
@@ -851,21 +858,120 @@ E|---------3-------3-------0-------|
     if (tab.idx >= n - 1) tab.idx = 0;
     tab.playing = true;
     updateTabUi();
+    runTab(true);
+  }
+
+  /** Steps through the tab in time. In play-along, each step is scored as it goes by. */
+  function runTab(sound) {
+    const n = tab.song.events.length;
     const step = () => {
       const ev = tabEvent();
       if (!ev) { stopTab(); return; }
+      if (tab.along) {
+        tab.stepAt = performance.now();
+        const prev = tab.idx - 1;
+        // a note played up to 350 ms late still counts for the step before
+        if (prev >= 0) setTimeout(() => { if (tab.along && !tab.results[prev]) { tab.results[prev] = 'miss'; showScore(true); highlightTab(); } }, 350);
+      }
       updateTabStep();
-      playTabEvent(ev);
-      const colMs = (90 * 100) / state.tabSpeed; // one "-" of tab
-      const wait = Math.min(Math.max(ev.gap, 2), 12) * colMs;
+      if (sound) playTabEvent(ev);
+      const wait = Math.min(Math.max(ev.gap, 2), 12) * colMs();
       tab.timer = setTimeout(() => {
-        if (tab.idx + 1 < n) tab.idx++;
-        else if (state.tabLoop) tab.idx = 0;
-        else { stopTab(); return; }
-        step();
+        if (tab.idx + 1 < n) { tab.idx++; step(); return; }
+        if (tab.along) {
+          const last = tab.idx;
+          if (!tab.results[last]) tab.results[last] = 'miss';
+          finishAlong();
+          if (!state.tabLoop) return;
+          tab.along = true; tab.playing = true; tab.results = [];
+          tab.idx = 0;
+          updateTabUi();
+          startAlongRun();
+          return;
+        }
+        if (state.tabLoop) { tab.idx = 0; step(); return; }
+        stopTab();
       }, wait);
     };
     step();
+  }
+
+  // ---------------- Play along (scored) ----------------
+  function scoreCounts() {
+    let hit = 0, miss = 0;
+    tab.results.forEach((r) => { if (r === 'hit') hit++; else if (r === 'miss') miss++; });
+    return { hit, miss };
+  }
+
+  function showScore(live) {
+    const { hit, miss } = scoreCounts();
+    const done = hit + miss;
+    if (!done && live) { $('tab-score').textContent = ''; return; }
+    const pct = done ? Math.round((hit / done) * 100) : 0;
+    $('tab-score').textContent = `✓ ${hit} hit · ✗ ${miss} missed${done ? ` · ${pct}%` : ''}${tab.best ? ` · best ${tab.best}%` : ''}`;
+  }
+
+  function finishAlong() {
+    const { hit, miss } = scoreCounts();
+    const pct = hit + miss ? Math.round((hit / (hit + miss)) * 100) : 0;
+    const newBest = pct > tab.best;
+    tab.best = Math.max(tab.best, pct);
+    tab.pass++;
+    clearTimeout(tab.timer);
+    tab.along = false;
+    tab.playing = false;
+    updateTabUi();
+    showScore(false);
+    highlightTab();
+    const msg = pct >= 95 ? '🎉 Brilliant!' : pct >= 80 ? '👍 Great!' : pct >= 50 ? 'Getting there!' : 'Keep at it - try a slower speed.';
+    tabFeedback(`${msg} You hit ${hit} of ${hit + miss} (${pct}%)${newBest && tab.pass > 1 ? ' - new best!' : ''}${pct >= 90 && state.tabSpeed < 200 ? ' Try it a bit faster?' : ''}`, pct >= 50 ? 'yes' : 'no');
+  }
+
+  function startAlongRun() {
+    const beat = colMs() * 4;
+    const go = () => { if (tab.along) { tab.counting = false; tabFeedback('Play!', ''); runTab(state.alongSound); } };
+    if (!state.countIn) { go(); return; }
+    tab.counting = true;
+    for (let i = 0; i < 4; i++) {
+      synth.click(i === 0, (i * beat) / 1000);
+      setTimeout(() => { if (tab.along) tabFeedback(`Count-in: ${i + 1}…`, ''); }, i * beat);
+    }
+    tab.timer = setTimeout(go, 4 * beat);
+  }
+
+  async function toggleAlong() {
+    if (!tabShown()) return;
+    if (tab.along) { stopTab(); tabFeedback('Stopped.', ''); return; }
+    stopTab();
+    if (tab.follow) setFollow(false);
+    if (practice.on) togglePractice();
+    if (!input.active) await startListening();
+    if (!input.active) return;
+    tab.along = true;
+    tab.playing = true;
+    tab.results = [];
+    if (tab.idx >= tab.song.events.length - 1) tab.idx = 0;
+    $('tab-score').textContent = '';
+    updateTabUi();
+    highlightTab();
+    startAlongRun();
+  }
+
+  /** Play along: does this note (or strum) match the step now, or the one just gone (a little late)? */
+  function alongHit(matches, at) {
+    if (!tab.along || tab.counting) return;
+    // `at` = when the note was played. Played before this step began -> it was for the step before;
+    // up to 350 ms into a step it may still be a late note for the step before.
+    const cands = at < tab.stepAt ? [tab.idx - 1, tab.idx] : at - tab.stepAt < 350 ? [tab.idx, tab.idx - 1] : [tab.idx];
+    for (const i of cands) {
+      const ev = tabEvent(i);
+      if (ev && !tab.results[i] && matches(ev)) {
+        tab.results[i] = 'hit';
+        showScore(true);
+        highlightTab();
+        return;
+      }
+    }
   }
 
   function tabFeedback(text, cls) {
@@ -910,13 +1016,17 @@ E|---------3-------3-------0-------|
     updateTabStep();
   }
 
+  const noteMatches = (ev, midi) => {
+    const want = tabMidis(ev);
+    return want.includes(midi) || (ev.notes.length > 1 && want.some((m) => T.pc(m) === T.pc(midi)));
+  };
+
   function tabNoteOn(midi, now) {
+    if (tab.along) { alongHit((ev) => noteMatches(ev, midi), Math.min(now, gate.attackStart > 0 ? gate.attackStart + 60 : now)); return; }
     if (!tab.follow || tab.playing || !tabShown()) return;
     const ev = tabEvent();
-    const want = tabMidis(ev);
     // For a chord the app usually hears just one of its notes, so any note of the chord counts.
-    const ok = want.includes(midi) || (ev.notes.length > 1 && want.some((m) => T.pc(m) === T.pc(midi)));
-    if (ok) { tabAdvance(); return; }
+    if (noteMatches(ev, midi)) { tabAdvance(); return; }
     if (now - tab.lastWrongAt < 300) return;
     tab.lastWrongAt = now;
     tab.mistakes++;
@@ -924,12 +1034,26 @@ E|---------3-------3-------0-------|
   }
 
   /** Chord steps: check the whole strum, as the pitch detector can't follow several notes at once. */
+  const strumMatches = (ev, profile) => {
+    const midis = tabMidis(ev);
+    const low = Math.min(...midis);
+    const pcs = [T.pc(low), ...new Set(midis.map(T.pc).filter((p) => p !== T.pc(low)))];
+    return window.ChordCheck.evaluate(profile, pcs).status === 'correct';
+  };
+
   function tabChordStrum(frame, now) {
-    if (!tab.follow || tab.playing || !tabShown()) return;
+    if (!tabShown() || !(tab.along || (tab.follow && !tab.playing))) return;
     const ev = tabEvent();
-    if (ev.notes.length < 3) return;
+    const prev = tabEvent(tab.idx - 1);
+    if (!ev || (ev.notes.length < 3 && !(tab.along && prev && prev.notes.length >= 3))) return;
     if (gate.attackStart === tab.chordOnset || now - gate.attackStart < 200 || now - gate.attackStart > 600) return;
     tab.chordOnset = gate.attackStart;
+    if (tab.along) {
+      const profile = window.ChordCheck.chroma(frame.long.slice(), frame.sampleRate);
+      alongHit((e) => e.notes.length >= 3 && strumMatches(e, profile), gate.attackStart);
+      return;
+    }
+    if (ev.notes.length < 3) return;
     const midis = tabMidis(ev);
     const low = Math.min(...midis);
     const pcs = [T.pc(low), ...new Set(midis.map(T.pc).filter((p) => p !== T.pc(low)))];
@@ -997,7 +1121,12 @@ E|---------3-------3-------0-------|
     $('tab-start').onclick = () => { stopTab(); gotoStep(0, false); };
     $('tab-prev').onclick = () => { stopTab(); gotoStep(tab.idx - 1, true); };
     $('tab-next').onclick = () => { stopTab(); gotoStep(tab.idx + 1, true); };
-    $('tab-play').onclick = playTab;
+    $('tab-play').onclick = () => { if (tab.along) stopTab(); playTab(); };
+    $('tab-along').onclick = toggleAlong;
+    $('tab-countin').checked = state.countIn;
+    $('tab-countin').onchange = (e) => { state.countIn = e.target.checked; save(); };
+    $('tab-along-sound').checked = state.alongSound;
+    $('tab-along-sound').onchange = (e) => { state.alongSound = e.target.checked; save(); };
     $('tab-view').onclick = (e) => {
       const t = e.target.closest('.ev');
       if (t) { stopTab(); gotoStep(Number(t.dataset.e), true); }
