@@ -56,4 +56,4 @@ To give testers a build first, tick **Set as a pre-release** instead. The app ig
 ### Notes
 
 - The installers are unsigned, so Windows SmartScreen shows "More info → Run anyway". On macOS, right-click the app → Open. If macOS says the app is "damaged", run `xattr -cr "/Applications/Guitar Visualizer.app"`.
-- **Linux / Raspberry Pi:** use the `.deb` (`sudo apt install ./guitar-visualizer_<version>_arm64.deb` on a Pi, `_amd64.deb` on a PC) or the AppImage. The AppImage needs `libfuse2` (`sudo apt install libfuse2`).
+- **Linux (64-bit PC):** use the `.deb` (`sudo apt install ./guitar-visualizer_<version>_amd64.deb`) or the AppImage. The AppImage needs `libfuse2` (`sudo apt install libfuse2`).
