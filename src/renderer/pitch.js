@@ -66,17 +66,32 @@
     // Octave check: low guitar strings (especially through a mic) often have a weak
     // fundamental, so the first dip can be an overtone. If a period 2x/3x/4x longer
     // fits clearly better, it is the real note.
+    // Only when the sound is steady: at a note change the window holds two different
+    // notes, and the check would wrongly drop an octave.
+    const half = buf.length >> 1;
+    const r1 = rms(buf.subarray(0, half)), r2 = rms(buf.subarray(half));
+    const steady = Math.max(r1, r2) <= 1.5 * Math.min(r1, r2);
+    // Compare interpolated dip depths: a string's period is rarely a whole number of
+    // samples, so raw values at tau vs 2*tau are not comparable.
+    const dip = (t) => {
+      if (t <= 1 || t >= tauMax) return d[t];
+      const a = d[t - 1], b = d[t], c = d[t + 1];
+      const den = a - 2 * b + c;
+      return den > 0 ? Math.max(0, b - ((a - c) * (a - c)) / (8 * den)) : b;
+    };
     const base = tau;
-    for (let k = 2; k <= 4; k++) {
+    const baseDip = dip(base);
+    for (let k = 2; steady && k <= 4; k++) {
       const centre = base * k;
       if (centre > tauMax) break;
       const lo = Math.max(tauMin, Math.floor(centre - 2 * k));
       const hi = Math.min(tauMax, Math.ceil(centre + 2 * k));
       let best = lo;
       for (let t = lo + 1; t <= hi; t++) if (d[t] < d[best]) best = t;
+      const bestDip = dip(best);
       // Must be clearly better: half the error AND a real gap (a true high note fits its
       // own period almost perfectly, so its multiples are never much better).
-      if (d[best] < d[base] * 0.3 && d[base] - d[best] > 0.02 && d[best] <= d[tau]) tau = best;
+      if (bestDip < baseDip * 0.3 && baseDip - bestDip > 0.02 && bestDip <= dip(tau)) tau = best;
     }
 
     // Parabolic interpolation for sub-sample accuracy.

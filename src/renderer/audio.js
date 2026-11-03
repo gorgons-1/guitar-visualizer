@@ -101,7 +101,8 @@
 
       this.source = ctx.createMediaStreamSource(this.stream);
       this.analyser = ctx.createAnalyser();
-      this.analyser.fftSize = 4096;
+      // Short window = fast response. Only very low tunings (bass) need the longer one.
+      this.analyser.fftSize = minFreq < 60 ? 4096 : 2048;
       this.monitorGain = ctx.createGain();
       this.monitorGain.gain.value = monitor ? 1 : 0;
       this.monitorGain.connect(ctx.destination);
@@ -123,13 +124,13 @@
       this.timer = setInterval(() => {
         this.analyser.getFloatTimeDomainData(buf);
         const level = window.Pitch.rms(buf);
-        // Level of only the newest ~20 ms, so a pick attack shows up as a sudden jump.
-        const attackLevel = window.Pitch.rms(buf.subarray(buf.length - 1024));
-        const { freq, clarity } = level >= this.threshold
+        // Level of only the newest ~10 ms, so a pick attack shows up as a sudden jump.
+        const attackLevel = window.Pitch.rms(buf.subarray(buf.length - 512));
+        const { freq, clarity } = level >= this.threshold * 0.5 // keep following a note as it fades
           ? window.Pitch.analyze(buf, sr, { minFreq, maxFreq })
           : { freq: -1, clarity: 0 };
         onFrame({ level, attackLevel, freq, clarity });
-      }, 50);
+      }, 20);
 
       const track = this.stream.getAudioTracks()[0];
       return track ? track.label : '';

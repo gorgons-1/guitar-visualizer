@@ -258,6 +258,7 @@
   }
 
   function playNote(midi, pos) {
+    handPos = pos; // clicking a fret also tells live input where your hand is
     synth.play(midi);
     flash([pos], 400);
   }

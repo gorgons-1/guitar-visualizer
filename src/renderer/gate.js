@@ -21,9 +21,12 @@
     constructor(opts = {}) {
       this.guitarOnly = opts.guitarOnly ?? true;
       this.minClarity = opts.minClarity ?? 0.88; // how "clean" the tone must be
-      this.maxWobble = opts.maxWobble ?? 25; // cents of pitch drift allowed across 3 frames
+      this.maxWobble = opts.maxWobble ?? 15; // cents of pitch drift allowed while a note settles
       this.attackWindow = opts.attackWindow ?? 500; // ms after a pluck in which a new note may start
-      this.attackRatio = opts.attackRatio ?? 2; // level jump that counts as a pluck (2x = +6 dB)
+      this.attackRatio = opts.attackRatio ?? 1.8; // level jump that counts as a pluck (~+5 dB)
+      this.holdMs = opts.holdMs ?? 250; // keep showing a note this long through gaps
+      this.maxRiseMs = opts.maxRiseMs ?? 80; // a pluck is at full volume within this time
+      this.stableFrames = opts.stableFrames ?? 4; // readings that must agree before a new note shows
       this.threshold = opts.threshold ?? 0.01; // noise gate (input level)
       this.reset();
     }
@@ -32,8 +35,11 @@
       this.attackLevels = [];
       this.freqs = [];
       this.lastAttack = -Infinity;
+      this.attackStart = -Infinity;
+      this.peakLevel = 0; // loudest point since the onset
+      this.peakTime = -Infinity; // when it got there
       this.note = null;
-      this.silent = 0;
+      this.lastUsable = -Infinity;
       this.candidate = null;
       this.candidateCount = 0;
     }
@@ -47,26 +53,38 @@
     push(frame, now) {
       // 1. Pluck detection from the newest samples.
       const prev = this.attackLevels.slice(-3);
-      if (prev.length && frame.attackLevel > this.threshold * 2 && frame.attackLevel > this.attackRatio * Math.min(...prev)) {
+      if (prev.length && frame.attackLevel > this.threshold && frame.attackLevel > this.attackRatio * Math.min(...prev)) {
+        // A slow fade-in triggers this several frames in a row; treat that as one onset.
+        if (now - this.lastAttack > 100) {
+          this.attackStart = now;
+          this.peakLevel = frame.level;
+          this.peakTime = now;
+        }
         this.lastAttack = now;
+      }
+      // Track how long the sound keeps getting louder after the onset.
+      if (now - this.attackStart <= 400 && frame.level > this.peakLevel * 1.03) {
+        this.peakLevel = frame.level;
+        this.peakTime = now;
       }
       this.attackLevels.push(frame.attackLevel);
       if (this.attackLevels.length > 6) this.attackLevels.shift();
 
       // 2. Reject frames with no pitch or (guitar-only) an unclean tone. Hold the note briefly.
-      const usable = frame.freq > 0 && frame.level >= this.threshold && (!this.guitarOnly || frame.clarity >= this.minClarity);
+      // Hysteresis: a note must pass the gate to start, but is followed down to half that level.
+      const usable = frame.freq > 0 && frame.level >= this.threshold * 0.5 && (!this.guitarOnly || frame.clarity >= this.minClarity);
       if (!usable) {
-        if (++this.silent > 8) {
+        if (now - this.lastUsable > this.holdMs) {
           this.note = null;
           this.freqs = [];
         }
         return this.note;
       }
-      this.silent = 0;
+      this.lastUsable = now;
       this.freqs.push(frame.freq);
-      if (this.freqs.length > 5) this.freqs.shift();
+      if (this.freqs.length > Math.max(3, this.stableFrames)) this.freqs.shift();
 
-      const f = median(this.freqs);
+      const f = median(this.freqs.slice(-3));
       const m = 69 + 12 * Math.log2(f / 440);
       const midi = Math.round(m);
       const c = Math.round((m - midi) * 100);
@@ -84,12 +102,15 @@
       }
 
       // 3. Guitar-only: a new note needs a steady pitch...
-      const last3 = this.freqs.slice(-3);
-      if (last3.length < 3) return this.note;
+      const last3 = this.freqs.slice(-this.stableFrames);
+      if (last3.length < this.stableFrames) return this.note;
       const wobble = cents(Math.max(...last3), Math.min(...last3));
       if (wobble > this.maxWobble) return this.note;
       // ...and must follow a pluck, unless a guitar note is already ringing (hammer-ons, slides).
-      const plucked = now - this.lastAttack <= this.attackWindow;
+      // A pluck reaches full volume almost at once (~50 ms, the analysis window filling up);
+      // a voice fading in keeps getting louder for much longer.
+      const quickRise = this.peakTime - this.attackStart <= this.maxRiseMs && now - this.peakTime >= 0;
+      const plucked = now - this.attackStart <= this.attackWindow && quickRise;
       if (!plucked && !this.note) return this.note;
 
       const settled = median(last3);
