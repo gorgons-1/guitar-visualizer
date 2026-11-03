@@ -18,14 +18,15 @@
    * @param {number} sampleRate
    * @param {{minFreq?:number,maxFreq?:number,threshold?:number}} opts
    */
-  function detect(buf, sampleRate, opts = {}) {
+  function analyze(buf, sampleRate, opts = {}) {
+    const none = { freq: -1, clarity: 0 };
     const minFreq = opts.minFreq || 60;
     const maxFreq = opts.maxFreq || 1500;
     const threshold = opts.threshold || 0.15;
     const tauMin = Math.max(2, Math.floor(sampleRate / maxFreq));
     const tauMax = Math.min(Math.floor(buf.length / 2), Math.ceil(sampleRate / minFreq));
     const width = buf.length - tauMax;
-    if (tauMax <= tauMin) return -1;
+    if (tauMax <= tauMin) return none;
 
     // Difference function.
     const d = new Float32Array(tauMax + 1);
@@ -58,7 +59,7 @@
     if (tau === -1) {
       let best = tauMin;
       for (let t = tauMin + 1; t <= tauMax; t++) if (d[t] < d[best]) best = t;
-      if (d[best] > 0.35) return -1;
+      if (d[best] > 0.35) return none;
       tau = best;
     }
 
@@ -85,8 +86,14 @@
       const den = a - 2 * b + c;
       if (den) better = tau + (0.5 * (a - c)) / den;
     }
-    return sampleRate / better;
+    // clarity: 1 = perfectly periodic (a clean string), lower = breathy / noisy (voices).
+    return { freq: sampleRate / better, clarity: Math.max(0, 1 - d[tau]) };
   }
 
-  return { rms, detect };
+  /** Frequency only (Hz), or -1. */
+  function detect(buf, sampleRate, opts = {}) {
+    return analyze(buf, sampleRate, opts).freq;
+  }
+
+  return { rms, analyze, detect };
 });

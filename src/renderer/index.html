@@ -91,6 +91,8 @@
           </label>
         </div>
         <label class="check"><input type="checkbox" id="monitor"> Monitor input through speakers (use headphones)</label>
+        <label class="check" title="Ignores voices, talking and background noise. Only notes that are plucked, clean and steady are shown.">
+          <input type="checkbox" id="guitar-only"> Guitar only (ignore voices &amp; background noise)</label>
         <label class="check"><input type="checkbox" id="show-all-live"> Show every place the played note can be found</label>
         <div class="row">
           <button id="listen" class="primary">&#127908; Start listening</button>
@@ -116,6 +118,7 @@
 
   <script src="theory.js"></script>
   <script src="pitch.js"></script>
+  <script src="gate.js"></script>
   <script src="audio.js"></script>
   <script src="app.js"></script>
 </body>

@@ -123,8 +123,12 @@
       this.timer = setInterval(() => {
         this.analyser.getFloatTimeDomainData(buf);
         const level = window.Pitch.rms(buf);
-        const freq = level >= this.threshold ? window.Pitch.detect(buf, sr, { minFreq, maxFreq }) : -1;
-        onFrame({ level, freq });
+        // Level of only the newest ~20 ms, so a pick attack shows up as a sudden jump.
+        const attackLevel = window.Pitch.rms(buf.subarray(buf.length - 1024));
+        const { freq, clarity } = level >= this.threshold
+          ? window.Pitch.analyze(buf, sr, { minFreq, maxFreq })
+          : { freq: -1, clarity: 0 };
+        onFrame({ level, attackLevel, freq, clarity });
       }, 50);
 
       const track = this.stream.getAudioTracks()[0];

@@ -9,7 +9,7 @@
   const DEFAULTS = {
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, tempo: 120,
-    device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false,
+    device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true,
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -295,8 +295,10 @@
 
   // ---------------- Live input ----------------
   const sensitivityToThreshold = (s) => 0.05 * Math.pow(0.02, s / 100);
-  let recent = [];
-  let candidate = null, candidateCount = 0, silentFrames = 0;
+  const gate = new window.NoteGate({ guitarOnly: state.guitarOnly });
+  const setThreshold = () => {
+    input.threshold = gate.threshold = sensitivityToThreshold(state.sensitivity);
+  };
 
   async function refreshDevices() {
     try {
@@ -313,8 +315,7 @@
   }
 
   function clearDetected() {
-    recent = [];
-    candidate = null;
+    gate.reset();
     if (liveMidi !== null) {
       liveMidi = null;
       livePos = null;
@@ -329,30 +330,23 @@
     $('needle').classList.remove('in-tune');
   }
 
-  function onFrame({ level, freq }) {
-    const db = 20 * Math.log10(level || 1e-6);
+  function onFrame(frame) {
+    const db = 20 * Math.log10(frame.level || 1e-6);
     $('level').style.width = Math.max(0, Math.min(100, ((db + 60) / 60) * 100)) + '%';
 
-    if (freq <= 0) {
-      if (++silentFrames > 8) clearDetected();
+    const note = gate.push(frame, performance.now());
+    if (!note) {
+      if (liveMidi !== null) clearDetected();
       return;
     }
-    silentFrames = 0;
-    recent.push(freq);
-    if (recent.length > 5) recent.shift();
-    const f = [...recent].sort((a, b) => a - b)[Math.floor(recent.length / 2)];
-    const m = T.freqToMidi(f);
-    const nearest = Math.round(m);
-    const cents = Math.round((m - nearest) * 100);
-
-    if (nearest === candidate) candidateCount++;
-    else { candidate = nearest; candidateCount = 1; }
-    if (candidateCount >= 2 && nearest !== liveMidi) {
-      liveMidi = nearest;
+    if (note.midi !== liveMidi) {
+      liveMidi = note.midi;
       livePos = bestPosition(liveMidi, handPos);
       if (livePos) handPos = livePos;
       drawOverlay();
     }
+    const f = note.freq;
+    const cents = note.cents;
     if (liveMidi === null) return;
 
     $('detected-note').textContent = T.noteNameWithOctave(liveMidi, state.flats);
@@ -377,7 +371,8 @@
         maxFreq: T.midiToFreq(tun[tun.length - 1] + state.frets) * 1.1,
         onFrame,
       });
-      input.threshold = sensitivityToThreshold(state.sensitivity);
+      setThreshold();
+      gate.reset();
       $('listen').textContent = '■ Stop listening';
       refreshDevices(); // labels become visible once permission is granted
     } catch (err) {
@@ -467,6 +462,8 @@
     $('tempo-val').textContent = state.tempo;
     $('channel').value = state.channel;
     $('monitor').checked = state.monitor;
+    $('guitar-only').checked = state.guitarOnly;
+    $('guitar-only').onchange = (e) => { state.guitarOnly = gate.guitarOnly = e.target.checked; save(); clearDetected(); };
     $('show-all-live').checked = state.showAllLive;
     $('show-all-live').onchange = (e) => { state.showAllLive = e.target.checked; save(); drawOverlay(); };
     $('sensitivity').value = state.sensitivity;
@@ -498,7 +495,7 @@
     $('monitor').onchange = (e) => { state.monitor = e.target.checked; save(); input.setMonitor(state.monitor); };
     $('sensitivity').oninput = (e) => {
       state.sensitivity = Number(e.target.value);
-      input.threshold = sensitivityToThreshold(state.sensitivity);
+      setThreshold();
       save();
     };
     $('refresh-devices').onclick = refreshDevices;
