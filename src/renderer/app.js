@@ -10,7 +10,7 @@
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, tempo: 120,
     device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
-    practiceType: 'find', useStrings: false, calib: {},
+    practiceType: 'find', useStrings: false, calib: {}, checkChord: false,
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -200,6 +200,8 @@
     $('scale-wrap').classList.toggle('hidden', !isScale);
     $('chord-wrap').classList.toggle('hidden', isScale);
     $('voicing-nav').classList.toggle('hidden', state.mode !== 'chord');
+    $('chord-check-row').classList.toggle('hidden', state.mode !== 'chord');
+    if (state.mode !== 'chord') { $('chord-feedback').textContent = ''; $('chord-feedback').className = 'chord-feedback'; }
 
     const rootName = name(state.root);
     if (isScale) $('title').textContent = `${rootName} ${T.SCALES[state.scale].name}`;
@@ -506,6 +508,53 @@
     }
   }
 
+  // ---------------- Chord checking ----------------
+  let chordOnset = -Infinity; // onset already checked
+  const chordLog = [];
+  const ROLE = (rootPc, pc) => ({ 0: 'root', 3: '3rd', 4: '3rd', 7: '5th', 10: '7th', 11: '7th', 9: '6th', 2: '9th', 5: '4th' })[T.pc(pc - rootPc)] || '';
+
+  function chordName() {
+    const c = T.CHORDS[state.chord];
+    return `${name(state.root)}${c.symbol || ''} (${name(state.root)} ${c.name.toLowerCase()})`;
+  }
+
+  function mistakeText(m, shape) {
+    if (!m) return '';
+    const lbl = stringLabel(m.s);
+    if (m.kind === 'not-ringing') return `Check the ${lbl} is ringing clearly.`;
+    if (m.kind === 'should-be-muted') return `Mute the ${lbl} - it shouldn't ring.`;
+    if (m.kind === 'wrong-fret') return `The ${lbl} sounds like fret ${m.fret} - it should be ${shape[m.s] === 0 ? 'open' : 'fret ' + shape[m.s]}.`;
+    return '';
+  }
+
+  function checkChordStrum(frame, now) {
+    if (!state.checkChord || state.mode !== 'chord') return;
+    if (gate.attackStart === chordOnset || now - gate.attackStart < 200 || now - gate.attackStart > 600) return;
+    chordOnset = gate.attackStart;
+    // A single plucked note is a clean, regular waveform; a chord isn't. Don't judge single notes.
+    if (frame.freq > 0 && frame.clarity >= 0.9) return;
+    const profile = window.ChordCheck.chroma(frame.long.slice(), frame.sampleRate);
+    const shape = currentVoicing();
+    const pcs = T.chordPcs(state.root, state.chord);
+    const res = window.ChordCheck.check(profile, pcs, shape, tuning());
+    chordLog.push({ t: Math.round(now), status: res.status, missing: res.missing, extra: res.extra, mistake: res.mistake, profile });
+    if (chordLog.length > 6) chordLog.shift();
+    const box = $('chord-feedback');
+    if (res.status === 'not-a-chord') return;
+    if (res.status === 'correct') {
+      box.textContent = `✓ ${chordName()} - correct!`;
+      box.className = 'chord-feedback yes';
+      if (shape) flash(shape.map((f, s) => (f === null ? null : { s, f })).filter(Boolean), 900);
+    } else {
+      const parts = [];
+      if (res.missing.length) parts.push('missing ' + res.missing.map((pc) => `${name(pc)} (${ROLE(state.root, pc)})`).join(', '));
+      if (res.extra.length) parts.push('extra ' + res.extra.map((pc) => name(pc)).join(', '));
+      const hint = mistakeText(res.mistake, shape || []);
+      box.textContent = `✗ Not quite: ${parts.join('; ')}. ${hint}`.trim();
+      box.className = 'chord-feedback no';
+    }
+  }
+
   // ---------------- Live input ----------------
   const sensitivityToThreshold = (s) => 0.05 * Math.pow(0.02, s / 100);
   const gate = new window.NoteGate({ guitarOnly: state.guitarOnly });
@@ -521,6 +570,7 @@
       `device="${deviceLabel}" channel=${state.channel} guitarOnly=${state.guitarOnly} sensitivity=${state.sensitivity} gate=${n(gate.threshold, 4)}`,
       `tuning=${state.tuning} sampleRate=${diagInfo.sampleRate} window=${diagInfo.fftSize}`,
       `calibration=${JSON.stringify((calibration() || []).map((b) => +b.toExponential(2)))} useStrings=${state.useStrings} handLock=${state.handLock || 'auto'}`,
+      ...chordLog.map((c) => `chord t=${c.t - t0} ${c.status} missing=${c.missing.map((p) => T.SHARPS[p]).join(',')} extra=${c.extra.map((p) => T.SHARPS[p]).join(',')} hint=${c.mistake ? c.mistake.kind + ':' + c.mistake.s + (c.mistake.fret !== undefined ? ':' + c.mistake.fret : '') : '-'} profile=${c.profile.map((v) => v.toFixed(2)).join(' ')}`),
       ...timbreLog.map((m) => `timbre t=${m.t - t0} note=${T.noteNameWithOctave(m.midi)} B=${m.B.toExponential(2)} partials=${m.partials} -> ${stringLabel(m.best.s)} fret ${m.best.f} (${m.pct}%)`),
       'ms     level  attack  freq     note  clarity onset decision        shown',
       ...diag.map((d) => [
@@ -587,6 +637,7 @@
     });
     if (diag.length > 200) diag.shift(); // ~4 seconds
     diagInfo = { sampleRate: frame.sampleRate, fftSize: frame.fftSize };
+    checkChordStrum(frame, now);
     if (!note) {
       if (liveMidi !== null) clearDetected();
       return;
@@ -778,6 +829,14 @@
     $('refresh-devices').onclick = refreshDevices;
     $('copy-diag').onclick = copyDiagnostics;
     $('calibrate').onclick = toggleCalibration;
+    $('check-chord').checked = state.checkChord;
+    $('check-chord').onchange = async (e) => {
+      state.checkChord = e.target.checked;
+      save();
+      if (state.checkChord && !input.active) await startListening();
+      $('chord-feedback').textContent = state.checkChord ? 'Strum the chord shown on the neck…' : '';
+      $('chord-feedback').className = 'chord-feedback';
+    };
     $('use-strings').onchange = (e) => { state.useStrings = e.target.checked; save(); };
     $('practice-toggle').onclick = togglePractice;
     $('practice-type').value = state.practiceType;
