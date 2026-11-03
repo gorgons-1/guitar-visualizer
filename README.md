@@ -8,6 +8,10 @@ A desktop app for exploring the guitar fretboard.
 - **Tunings**: standard, drop D/C, Eb, D standard, DADGAD, open G/D/E, 7-string and 4-string bass, with a left-handed view.
 - **Sound**: click any fret to hear it, or press **Play** (or Space) to hear the scale, arpeggio or chord.
 - **Live input**: choose a microphone or USB guitar interface and the input channel. The notes you play light up on the neck, and a tuner shows whether each note is in key.
+- **Hand position**: lock to a 5-fret area so played notes always show in the right place.
+- **Practice mode**: the app picks a target (random, or the scale in order) and checks you play it; tracks score, streak and reaction time.
+- **String detection (experimental)**: calibrate once by plucking each open string; the app then measures each note's overtones (string stiffness / inharmonicity) to work out which string you played.
+- **Copy diagnostics**: copies the last 4 seconds of what the app heard, for troubleshooting.
 
 ## Development
 

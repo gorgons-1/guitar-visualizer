@@ -101,8 +101,10 @@
 
       this.source = ctx.createMediaStreamSource(this.stream);
       this.analyser = ctx.createAnalyser();
-      // Short window = fast response. Only very low tunings (bass) need the longer one.
-      this.analyser.fftSize = minFreq < 60 ? 4096 : 2048;
+      // Keep ~170 ms of audio: the newest 2048 samples (4096 for bass tunings) are used for fast
+      // pitch detection; the whole buffer is used to measure string timbre (string detection).
+      this.analyser.fftSize = 8192;
+      const pitchSize = minFreq < 60 ? 4096 : 2048;
       this.monitorGain = ctx.createGain();
       this.monitorGain.gain.value = monitor ? 1 : 0;
       this.monitorGain.connect(ctx.destination);
@@ -119,10 +121,11 @@
       signal.connect(this.analyser);
       signal.connect(this.monitorGain);
 
-      const buf = new Float32Array(this.analyser.fftSize);
+      const long = new Float32Array(this.analyser.fftSize);
+      const buf = long.subarray(long.length - pitchSize);
       const sr = ctx.sampleRate;
       this.timer = setInterval(() => {
-        this.analyser.getFloatTimeDomainData(buf);
+        this.analyser.getFloatTimeDomainData(long);
         const level = window.Pitch.rms(buf);
         // Level of only the newest ~21 ms, so a pick attack shows up as a sudden jump.
         // (Must be longer than one cycle of the low E, ~12 ms, or the level flickers.)
@@ -130,7 +133,8 @@
         const { freq, clarity } = level >= this.threshold * 0.5 // keep following a note as it fades
           ? window.Pitch.analyze(buf, sr, { minFreq, maxFreq })
           : { freq: -1, clarity: 0 };
-        onFrame({ level, attackLevel, freq, clarity, sampleRate: sr, fftSize: buf.length });
+        // `long` is reused every frame: copy it (long.slice()) if you need to keep it.
+        onFrame({ level, attackLevel, freq, clarity, sampleRate: sr, fftSize: buf.length, long });
       }, 20);
 
       const track = this.stream.getAudioTracks()[0];

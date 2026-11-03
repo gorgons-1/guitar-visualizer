@@ -113,6 +113,40 @@
           <span id="diag-status" class="muted"></span>
         </div>
       </div>
+
+      <div class="card">
+        <h2>Practice</h2>
+        <div class="row">
+          <label>Exercise
+            <select id="practice-type">
+              <option value="find">Find the note (random)</option>
+              <option value="run">Play in order (up &amp; down)</option>
+            </select>
+          </label>
+          <button id="practice-toggle" class="primary">Start practice</button>
+        </div>
+        <p class="hint">Uses the notes of the current scale or chord, inside your Hand position area (whole neck on Auto). The target is circled in green.</p>
+        <div id="practice-target" class="target-text">–</div>
+        <div id="practice-feedback"></div>
+        <div class="row stats">
+          <span>✓ <b id="p-right">0</b></span>
+          <span>✗ <b id="p-wrong">0</b></span>
+          <span>Streak <b id="p-streak">0</b></span>
+          <span>Best <b id="p-best">0</b></span>
+          <span>Avg time <b id="p-time">–</b></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>String detection <span class="badge">experimental</span></h2>
+        <p class="hint">Learns how each string on your guitar sounds, then works out which string you played. Calibrate once per guitar and tuning, with the guitar in tune.</p>
+        <div class="row">
+          <button id="calibrate">Calibrate</button>
+          <label class="check"><input type="checkbox" id="use-strings"> Use string detection</label>
+        </div>
+        <div id="calib-status" class="muted"></div>
+        <div id="string-guess"></div>
+      </div>
     </section>
   </main>
 
@@ -125,6 +159,7 @@
   <script src="theory.js"></script>
   <script src="pitch.js"></script>
   <script src="gate.js"></script>
+  <script src="timbre.js"></script>
   <script src="audio.js"></script>
   <script src="app.js"></script>
 </body>

@@ -10,6 +10,7 @@
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, tempo: 120,
     device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
+    practiceType: 'find', useStrings: false, calib: {},
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -181,6 +182,8 @@
     const mark = (p, cls) =>
       el('circle', { cx: geom.X(geom.noteX(p.f)), cy: geom.sy(p.s), r: 15, class: 'ring ' + cls }, liveLayer);
     playingMarks.forEach((p) => mark(p, 'playing'));
+    const target = cal.active ? { s: cal.s, f: 0 } : practice.on ? practice.target : null;
+    if (target) mark(target, 'target');
     if (liveMidi !== null) {
       const list = state.showAllLive ? positionsOf(liveMidi) : livePos ? [livePos] : [];
       list.forEach((p) => mark(p, 'live'));
@@ -233,6 +236,14 @@
     renderInfo();
     drawBoard();
     save();
+    if (typeof updateStringsUi === 'function') updateStringsUi();
+    // Scale, chord, tuning or Hand position changed: keep practice targets inside the new notes/area.
+    if (practice.on) {
+      practice.order = [];
+      practice.idx = 0;
+      const t = practice.target;
+      if (!t || !practicePool().some((p) => p.s === t.s && p.f === t.f)) nextTarget();
+    }
   }
 
   // ---------------- Sound ----------------
@@ -291,6 +302,210 @@
     }, seq.length * step * 1000 + 300));
   }
 
+  // ---------------- String detection (experimental) ----------------
+  const stringLabel = (s) => `${T.noteName(tuning()[s], state.flats)} string (${tuning().length - s})`;
+  const calibration = () => (state.calib && state.calib[state.tuning]) || null;
+  const cal = { active: false, s: 0, samples: [], result: [], lastMeasure: 0, since: 0 };
+  let noteOnAt = 0; // when the current note started (new pitch or re-pluck)
+  let lastOnset = -Infinity;
+  let measuredFor = -1;
+  const timbreLog = [];
+
+  function updateStringsUi() {
+    const c = calibration();
+    $('use-strings').disabled = !c;
+    $('use-strings').checked = !!(c && state.useStrings);
+    $('calibrate').textContent = cal.active ? 'Cancel' : c ? 'Re-calibrate' : 'Calibrate';
+    if (!cal.active) {
+      $('calib-status').textContent = c
+        ? `Calibrated for ${T.TUNINGS[state.tuning].name}.`
+        : `Not calibrated for ${T.TUNINGS[state.tuning].name} yet.`;
+    }
+  }
+
+  async function toggleCalibration() {
+    if (cal.active) {
+      cal.active = false;
+      updateStringsUi();
+      drawOverlay();
+      return;
+    }
+    if (!input.active) await startListening();
+    if (!input.active) return;
+    Object.assign(cal, { active: true, s: 0, samples: [], result: [], lastMeasure: 0, since: performance.now() });
+    calPrompt();
+    updateStringsUi();
+    drawOverlay();
+  }
+
+  function calPrompt(extra = '') {
+    $('calib-status').textContent =
+      `${extra}Pluck the open ${stringLabel(cal.s)} and let it ring (${cal.s + 1} of ${tuning().length}).`;
+  }
+
+  function calibrationStep(frame, note, now) {
+    const want = tuning()[cal.s];
+    if (!note) return;
+    if (note.midi !== want) {
+      // Only complain about a newly plucked wrong note (the last string may still be ringing).
+      if (noteOnAt > cal.since && now - noteOnAt > 150) calPrompt(`Heard ${T.noteNameWithOctave(note.midi, state.flats)}. `);
+      return;
+    }
+    const age = now - noteOnAt;
+    if (age < 120 || age > 1500 || now - cal.lastMeasure < 110) return;
+    cal.lastMeasure = now;
+    const r = window.Timbre.measure(frame.long.slice(), frame.sampleRate, note.freq);
+    if (r) cal.samples.push(r.B);
+    else if (age > 1200 && cal.samples.length === 0) {
+      calPrompt("Couldn't read that one clearly - pluck a bit harder. ");
+      return;
+    }
+    if (cal.samples.length < 3) return;
+    const sorted = [...cal.samples].sort((a, b) => a - b);
+    cal.result[cal.s] = sorted[1];
+    cal.samples = [];
+    cal.s++;
+    cal.since = now;
+    if (cal.s >= tuning().length) {
+      state.calib = { ...(state.calib || {}), [state.tuning]: cal.result.slice() };
+      state.useStrings = true;
+      cal.active = false;
+      save();
+      updateStringsUi();
+      $('calib-status').textContent = 'Calibration done! String detection is on.';
+    } else {
+      calPrompt('Got it. ');
+    }
+    drawOverlay();
+  }
+
+  /** After a note has rung ~120 ms, measure its timbre and pick the string. */
+  function detectString(frame, note, now) {
+    const c = calibration();
+    if (!state.useStrings || !c || cal.active || measuredFor === noteOnAt) return;
+    const age = now - noteOnAt;
+    if (age < 120 || age > 800) return;
+    measuredFor = noteOnAt;
+    const cands = positionsOf(note.midi);
+    if (cands.length < 2) { $('string-guess').textContent = ''; return; }
+    if (practice.on && practice.target && note.midi === practice.target.midi) return; // target position is known
+    const r = window.Timbre.measure(frame.long.slice(), frame.sampleRate, note.freq);
+    if (!r) { $('string-guess').textContent = 'String: couldn\'t measure this note'; return; }
+    const lock = handLock();
+    const prior = (p) => {
+      if (lock === null) return 0;
+      const outside = p.f < lock ? lock - p.f : p.f > lock + 4 ? p.f - lock - 4 : 0;
+      return outside * 1.5;
+    };
+    const res = window.Timbre.classify(cands, r.B, c, prior);
+    const pct = Math.round(res.confidence * 100);
+    timbreLog.push({ t: Math.round(now), midi: note.midi, B: r.B, partials: r.partials, best: res.best, pct });
+    if (timbreLog.length > 12) timbreLog.shift();
+    if (res.confidence >= 0.6) {
+      livePos = res.best;
+      if (livePos.f > 0) handPos = livePos;
+      $('string-guess').textContent = `String: ${stringLabel(res.best.s)}, fret ${res.best.f} (${pct}% sure)`;
+      drawOverlay();
+    } else {
+      $('string-guess').textContent = `String: not sure (best guess ${stringLabel(res.best.s)}, ${pct}%)`;
+    }
+  }
+
+  // ---------------- Practice mode ----------------
+  const practice = { on: false, target: null, order: [], idx: 0, shownAt: 0, right: 0, wrong: 0, streak: 0, best: 0, times: [], lastWrongAt: 0 };
+
+  function practicePool() {
+    const lock = handLock();
+    const lo = lock === null ? 0 : lock, hi = lock === null ? state.frets : lock + 4;
+    const pcs = new Set(activePcs());
+    const pool = [];
+    tuning().forEach((open, s) => {
+      for (let f = lo; f <= hi; f++) {
+        if (f === 0 && lo > 0) continue;
+        const midi = open + f;
+        if (pcs.has(T.pc(midi))) pool.push({ s, f, midi });
+      }
+    });
+    if (lo > 0) tuning().forEach((open, s) => { if (pcs.has(T.pc(open)) && lo <= 1) pool.push({ s, f: 0, midi: open }); });
+    return pool;
+  }
+
+  function buildOrder() {
+    const byMidi = new Map();
+    for (const p of practicePool()) if (!byMidi.has(p.midi)) byMidi.set(p.midi, p); // lowest string first
+    const up = [...byMidi.values()].sort((a, b) => a.midi - b.midi);
+    return up.concat(up.slice(0, -1).reverse().slice(0, -1));
+  }
+
+  function nextTarget() {
+    if (state.practiceType === 'run') {
+      if (!practice.order.length) practice.order = buildOrder();
+      practice.target = practice.order[practice.idx % practice.order.length] || null;
+      practice.idx++;
+    } else {
+      const pool = practicePool().filter((p) => !practice.target || p.midi !== practice.target.midi);
+      practice.target = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    }
+    practice.shownAt = performance.now();
+    renderPractice();
+    drawOverlay();
+  }
+
+  function renderPractice(feedback, cls) {
+    $('practice-toggle').textContent = practice.on ? 'Stop practice' : 'Start practice';
+    const t = practice.target;
+    $('practice-target').textContent = practice.on
+      ? (t ? `Play ${T.noteNameWithOctave(t.midi, state.flats)} — ${stringLabel(t.s)}, ${t.f === 0 ? 'open' : 'fret ' + t.f}` : 'No notes in this area — change the scale or Hand position')
+      : '–';
+    if (feedback !== undefined) {
+      $('practice-feedback').textContent = feedback;
+      $('practice-feedback').className = cls || '';
+    }
+    $('p-right').textContent = practice.right;
+    $('p-wrong').textContent = practice.wrong;
+    $('p-streak').textContent = practice.streak;
+    $('p-best').textContent = practice.best;
+    const avg = practice.times.length ? practice.times.reduce((a, b) => a + b, 0) / practice.times.length : 0;
+    $('p-time').textContent = avg ? (avg / 1000).toFixed(1) + ' s' : '–';
+  }
+
+  async function togglePractice() {
+    if (practice.on) {
+      practice.on = false;
+      practice.target = null;
+      renderPractice('', '');
+      drawOverlay();
+      return;
+    }
+    if (!input.active) await startListening();
+    if (!input.active) return;
+    Object.assign(practice, { on: true, target: null, order: [], idx: 0, right: 0, wrong: 0, streak: 0, best: 0, times: [] });
+    nextTarget();
+    renderPractice('Go!', '');
+  }
+
+  function practiceNoteOn(midi, now) {
+    const t = practice.target;
+    if (!practice.on || !t) return;
+    if (midi === t.midi) {
+      practice.right++;
+      practice.streak++;
+      practice.best = Math.max(practice.best, practice.streak);
+      practice.times.push(now - practice.shownAt);
+      if (practice.times.length > 20) practice.times.shift();
+      livePos = { s: t.s, f: t.f }; // we know exactly where it was meant to be played
+      renderPractice('✓ Correct!', 'yes');
+      drawOverlay();
+      const done = practice.target;
+      setTimeout(() => { if (practice.on && practice.target === done) nextTarget(); }, 450);
+    } else if (now - practice.lastWrongAt > 300) {
+      practice.lastWrongAt = now;
+      practice.wrong++;
+      practice.streak = 0;
+      renderPractice(`✗ That was ${T.noteNameWithOctave(midi, state.flats)} — try ${T.noteNameWithOctave(t.midi, state.flats)}`, 'no');
+    }
+  }
+
   // ---------------- Live input ----------------
   const sensitivityToThreshold = (s) => 0.05 * Math.pow(0.02, s / 100);
   const gate = new window.NoteGate({ guitarOnly: state.guitarOnly });
@@ -305,6 +520,8 @@
       `Guitar Visualizer diagnostics  v${$('version').textContent.replace('v', '') || '?'}`,
       `device="${deviceLabel}" channel=${state.channel} guitarOnly=${state.guitarOnly} sensitivity=${state.sensitivity} gate=${n(gate.threshold, 4)}`,
       `tuning=${state.tuning} sampleRate=${diagInfo.sampleRate} window=${diagInfo.fftSize}`,
+      `calibration=${JSON.stringify((calibration() || []).map((b) => +b.toExponential(2)))} useStrings=${state.useStrings} handLock=${state.handLock || 'auto'}`,
+      ...timbreLog.map((m) => `timbre t=${m.t - t0} note=${T.noteNameWithOctave(m.midi)} B=${m.B.toExponential(2)} partials=${m.partials} -> ${stringLabel(m.best.s)} fret ${m.best.f} (${m.pct}%)`),
       'ms     level  attack  freq     note  clarity onset decision        shown',
       ...diag.map((d) => [
         String(d.t - t0).padStart(5), n(d.lv, 4).padStart(6), n(d.al, 4).padStart(7),
@@ -374,14 +591,23 @@
       if (liveMidi !== null) clearDetected();
       return;
     }
-    if (note.midi !== liveMidi) {
+    // Same pitch plucked again (settled, not mid-change) also counts as a new note.
+    const repluck = gate.reason === 'same-note' && gate.attackStart !== lastOnset
+      && gate.attackStart > noteOnAt && now - gate.attackStart >= 80;
+    if (note.midi !== liveMidi || repluck) {
       liveMidi = note.midi;
+      noteOnAt = now;
+      lastOnset = gate.attackStart;
       const hand = now - handTime < 2000 ? handPos : null; // forget the hand after a 2 s pause
       livePos = bestPosition(liveMidi, hand);
       if (livePos && livePos.f > 0) handPos = livePos; // open strings don't move the hand
+      if (state.useStrings && calibration()) $('string-guess').textContent = '';
+      practiceNoteOn(liveMidi, now);
       drawOverlay();
     }
     handTime = now;
+    if (cal.active) calibrationStep(frame, note, now);
+    else detectString(frame, note, now);
     const f = note.freq;
     const cents = note.cents;
     if (liveMidi === null) return;
@@ -551,6 +777,17 @@
     };
     $('refresh-devices').onclick = refreshDevices;
     $('copy-diag').onclick = copyDiagnostics;
+    $('calibrate').onclick = toggleCalibration;
+    $('use-strings').onchange = (e) => { state.useStrings = e.target.checked; save(); };
+    $('practice-toggle').onclick = togglePractice;
+    $('practice-type').value = state.practiceType;
+    $('practice-type').onchange = (e) => {
+      state.practiceType = e.target.value;
+      save();
+      if (practice.on) { practice.order = []; practice.idx = 0; nextTarget(); }
+    };
+    updateStringsUi();
+    renderPractice();
     $('listen').onclick = () => (input.active ? stopListening() : startListening());
     navigator.mediaDevices.addEventListener('devicechange', refreshDevices);
 

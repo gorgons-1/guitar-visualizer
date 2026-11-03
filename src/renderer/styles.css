@@ -114,3 +114,14 @@ footer { display: flex; gap: 12px; align-items: center; padding: 6px 16px; backg
 .ring.live { stroke: #fff; animation: pulse .6s ease-in-out infinite alternate; }
 .ring.playing { stroke: var(--accent); }
 @keyframes pulse { from { stroke-opacity: 1; } to { stroke-opacity: .35; } }
+
+/* Practice + string detection */
+.ring.target { stroke: var(--good); stroke-width: 4; animation: pulse .5s ease-in-out infinite alternate; }
+.target-text { font-size: 20px; font-weight: 700; }
+#practice-feedback { min-height: 1.4em; font-weight: 600; }
+#practice-feedback.yes { color: var(--good); }
+#practice-feedback.no { color: var(--bad); }
+.stats { gap: 18px; color: var(--muted); }
+.stats b { color: var(--text); }
+.badge { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: #3b2f1a; color: var(--accent); vertical-align: middle; }
+#string-guess { font-weight: 600; min-height: 1.2em; }
