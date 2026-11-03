@@ -9,7 +9,7 @@
   const DEFAULTS = {
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, tempo: 120,
-    device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true,
+    device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -129,6 +129,13 @@
       t.textContent = f;
     }
 
+    // Locked hand-position area
+    if (handLock() !== null) {
+      const lo = handLock(), hi = Math.min(N, lo + 4);
+      const x1 = lo === 0 ? openX - 16 : fx(lo - 1), x2 = fx(hi);
+      rect(x1, x2, boardTop - 6, boardBot - boardTop + 12, 'hand-area');
+    }
+
     // Notes
     const pcs = activePcs();
     const pcSet = new Set(pcs);
@@ -181,7 +188,8 @@
   }
 
   const positionsOf = (midi) => T.positionsOf(tuning(), state.frets, midi);
-  const bestPosition = (midi, hand) => T.guessPosition(tuning(), state.frets, midi, hand);
+  const handLock = () => (state.handLock === '' || state.handLock === undefined ? null : Number(state.handLock));
+  const bestPosition = (midi, hand) => T.guessPosition(tuning(), state.frets, midi, hand, handLock());
 
   // ---------------- Side panel ----------------
   function renderInfo() {
@@ -474,6 +482,13 @@
   }
 
   // ---------------- Wiring ----------------
+  function fillHandLock() {
+    const entries = [['', 'Auto (guess)']];
+    for (let f = 0; f + 4 <= state.frets; f++) entries.push([String(f), f === 0 ? 'Frets 0–4 (open position)' : `Frets ${f}–${f + 4}`]);
+    if (handLock() !== null && handLock() + 4 > state.frets) state.handLock = '';
+    fillSelect($('hand-lock'), entries, state.handLock);
+  }
+
   function fillRootSelect() {
     fillSelect($('root'), T.SHARPS.map((_, i) => [i, name(i)]), state.root);
   }
@@ -494,6 +509,12 @@
     $('monitor').checked = state.monitor;
     $('guitar-only').checked = state.guitarOnly;
     $('guitar-only').onchange = (e) => { state.guitarOnly = gate.guitarOnly = e.target.checked; save(); gate.reset(); clearDetected(); };
+    fillHandLock();
+    $('hand-lock').onchange = (e) => {
+      state.handLock = e.target.value;
+      if (liveMidi !== null) livePos = bestPosition(liveMidi, handPos);
+      render();
+    };
     $('show-all-live').checked = state.showAllLive;
     $('show-all-live').onchange = (e) => { state.showAllLive = e.target.checked; save(); drawOverlay(); };
     $('sensitivity').value = state.sensitivity;
@@ -510,7 +531,7 @@
     bind('scale', 'scale');
     bind('chord', 'chord');
     bind('tuning', 'tuning', String, restartIfListening);
-    bind('frets', 'frets', Number);
+    bind('frets', 'frets', Number, () => fillHandLock());
     bind('labels', 'labels');
     bind('flats', 'flats', Boolean, fillRootSelect);
     bind('lefty', 'lefty', Boolean);

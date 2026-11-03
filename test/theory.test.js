@@ -77,3 +77,19 @@ test('guessing the fret for a played note', () => {
   // only one place for the open low E
   assert.deepEqual(pos(40, { s: 3, f: 9 }), { s: 0, f: 0 });
 });
+
+test('hand position locked to a fret area', () => {
+  const pos = (midi, lock, hand = null) => T.guessPosition(std, 15, midi, hand, lock);
+  // E4 with hand locked at frets 0-4 -> open high E
+  assert.deepEqual(pos(64, 0), { s: 5, f: 0 });
+  // E4 locked at frets 3-7 -> B string 5th fret
+  assert.deepEqual(pos(64, 3), { s: 4, f: 5 });
+  // E4 locked at frets 7-11 -> G string 9th fret
+  assert.deepEqual(pos(64, 7), { s: 3, f: 9 });
+  // E4 locked at frets 12-16 -> D string 14th fret
+  assert.deepEqual(pos(64, 12), { s: 2, f: 14 });
+  // open low E has only one place, even when locked higher up
+  assert.deepEqual(pos(40, 7), { s: 0, f: 0 });
+  // A note outside the area goes to the nearest place to it
+  assert.deepEqual(pos(41, 7), { s: 0, f: 1 });
+});

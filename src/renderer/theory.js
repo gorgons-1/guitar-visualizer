@@ -176,9 +176,19 @@
    * - Otherwise prefer notes inside the hand's reach (about frets f-1 .. f+3), on nearby strings.
    * - With no hand info, the lowest fret wins (open strings first).
    */
-  function guessPosition(tuning, frets, midi, hand) {
+  function guessPosition(tuning, frets, midi, hand, lockStart = null) {
     const options = positionsOf(tuning, frets, midi);
     if (!options.length) return null;
+    if (lockStart !== null && lockStart !== undefined) {
+      // The player told us where their hand is: a 5-fret area starting at lockStart.
+      const lo = lockStart, hi = lockStart + 4;
+      const lockCost = (p) => {
+        if (p.f === 0 && lo > 0) return 50; // open strings belong to the 0-4 area (only used if nothing else fits)
+        const outside = p.f < lo ? lo - p.f : p.f > hi ? p.f - hi : 0;
+        return outside * 10 + (hand ? 0.3 * Math.abs(p.s - hand.s) : 0) + 0.01 * p.f;
+      };
+      return options.reduce((a, b) => (lockCost(b) < lockCost(a) ? b : a));
+    }
     const OPEN = 0.5;
     const cost = (p) => {
       if (!hand) return p.f;
