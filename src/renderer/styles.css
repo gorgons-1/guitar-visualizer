@@ -129,3 +129,8 @@ footer { display: flex; gap: 12px; align-items: center; padding: 6px 16px; backg
 .chord-feedback { font-size: 18px; font-weight: 700; min-height: 1.4em; }
 .chord-feedback.yes { color: var(--good); }
 .chord-feedback.no { color: var(--bad); font-size: 15px; }
+
+.ring.next { stroke: var(--good); stroke-dasharray: 4 3; }
+.ring.next1 { stroke-opacity: .8; } .ring.next2 { stroke-opacity: .55; } .ring.next3 { stroke-opacity: .35; }
+.next-num { fill: var(--good); font-size: 12px; font-weight: 700; text-anchor: middle; pointer-events: none; }
+.next-num.now { fill: #fff; }

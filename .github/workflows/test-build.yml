@@ -19,7 +19,9 @@ jobs:
             files: dist/*.dmg
           - os: ubuntu-latest
             name: linux
-            files: dist/*.AppImage
+            files: |
+              dist/*.AppImage
+              dist/*.deb
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

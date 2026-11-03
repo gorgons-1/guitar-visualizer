@@ -164,6 +164,36 @@
 
   const formatVoicing = (v) => v.map((f) => (f === null ? 'x' : f)).join(' ');
 
+  /**
+   * A scale "box": the notes of a scale within a 5-fret position starting at `start`, in playing
+   * order (low string to high string, low fret to high fret on each string).
+   * Where the same pitch appears on two strings (only happens across the G-B gap) the higher
+   * string is kept, as in the standard fingerings. start = 0 means open position (frets 0-4).
+   */
+  function scaleBox(tuning, pcs, start) {
+    const set = new Set(pcs.map(pc));
+    const lo = start, hi = start + 4;
+    const notes = [];
+    tuning.forEach((open, s) => {
+      for (let f = lo; f <= hi; f++) if (set.has(pc(open + f))) notes.push({ s, f, midi: open + f });
+    });
+    // Same pitch on two strings: keep the higher string (drop the lower-string occurrence).
+    const kept = notes.filter((n) => !notes.some((m) => m.midi === n.midi && m.s > n.s));
+    return kept.sort((a, b) => a.midi - b.midi);
+  }
+
+  /** Lesson sequence: up the box and back down (top note not repeated). */
+  function scaleLesson(tuning, pcs, start) {
+    const up = scaleBox(tuning, pcs, start);
+    return up.concat(up.slice(0, -1).reverse());
+  }
+
+  /** Default position for a lesson: where the root sits on the lowest string (open position if fret 0 or > 12). */
+  function defaultPosition(tuning, rootPc) {
+    const f = ((rootPc - tuning[0]) % 12 + 12) % 12;
+    return f === 0 ? 0 : f;
+  }
+
   /** Every place on the neck where this exact pitch can be played: [{s, f}]. */
   function positionsOf(tuning, frets, midi) {
     return tuning.map((open, s) => ({ s, f: midi - open })).filter((p) => p.f >= 0 && p.f <= frets);
@@ -203,6 +233,6 @@
   return {
     SHARPS, FLATS, INTERVALS, SCALES, CHORDS, TUNINGS,
     pc, noteName, noteNameWithOctave, intervalName, midiToFreq, freqToMidi,
-    scalePcs, chordPcs, fretboard, buildRun, findVoicings, formatVoicing, positionsOf, guessPosition,
+    scalePcs, chordPcs, fretboard, buildRun, findVoicings, formatVoicing, positionsOf, guessPosition, scaleBox, scaleLesson, defaultPosition,
   };
 });

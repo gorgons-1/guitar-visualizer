@@ -93,3 +93,28 @@ test('hand position locked to a fret area', () => {
   // A note outside the area goes to the nearest place to it
   assert.deepEqual(pos(41, 7), { s: 0, f: 1 });
 });
+
+test('scale box: A minor pentatonic at the 5th fret is the standard "box 1"', () => {
+  const box = T.scaleBox(std, T.scalePcs(A, 'minorPentatonic'), 5);
+  const byString = [0, 1, 2, 3, 4, 5].map((s) => box.filter((n) => n.s === s).map((n) => n.f));
+  assert.deepEqual(byString, [[5, 8], [5, 7], [5, 7], [5, 7], [5, 8], [5, 8]]);
+  // notes go up in pitch
+  for (let i = 1; i < box.length; i++) assert.ok(box[i].midi > box[i - 1].midi);
+});
+
+test('scale lesson goes up the box and back down', () => {
+  const lesson = T.scaleLesson(std, T.scalePcs(A, 'minorPentatonic'), 5);
+  assert.equal(lesson.length, 12 + 11);
+  assert.deepEqual(lesson[0], { s: 0, f: 5, midi: 45 });
+  assert.deepEqual(lesson[11], { s: 5, f: 8, midi: 72 });
+  assert.deepEqual(lesson[lesson.length - 1], lesson[0]);
+});
+
+test('scale box: G major open position and default positions', () => {
+  const box = T.scaleBox(std, T.scalePcs(G, 'major'), 0);
+  assert.ok(box.every((n) => n.f <= 4));
+  assert.equal(new Set(box.map((n) => n.midi)).size, box.length, 'no repeated pitches');
+  assert.equal(T.defaultPosition(std, A), 5); // A on the low E is fret 5
+  assert.equal(T.defaultPosition(std, E), 0); // E is the open low E
+  assert.equal(T.defaultPosition(std, G), 3);
+});

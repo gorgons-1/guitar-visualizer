@@ -75,7 +75,31 @@
             "x64",
             "arm64"
           ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
+      ],
+      "maintainer": "Paul Hellyer <paul.hellyer1978@outlook.com>",
+      "synopsis": "Guitar fretboard visualizer with live input, lessons and chord checking",
+      "syncDesktopName": true
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libasound2"
       ]
     }
   },
@@ -85,5 +109,7 @@
   "devDependencies": {
     "electron": "^41.7.1",
     "electron-builder": "^26.18.0"
-  }
+  },
+  "homepage": "https://github.com/gorgons-1/guitar-visualizer",
+  "desktopName": "guitar-visualizer.desktop"
 }

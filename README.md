@@ -10,7 +10,7 @@ A desktop app for exploring the guitar fretboard.
 - **Live input**: choose a microphone or USB guitar interface and the input channel. The notes you play light up on the neck, and a tuner shows whether each note is in key.
 - **Chord check**: in Chord mode, tick *Check my chord when I strum* and the app tells you if the chord is right, or what's wrong (missing note, extra note, which string to fix).
 - **Hand position**: lock to a 5-fret area so played notes always show in the right place.
-- **Practice mode**: the app picks a target (random, or the scale in order) and checks you play it; tracks score, streak and reaction time.
+- **Practice & lessons**: *Find the note* (random targets) or a *Scale lesson* that walks you up and down a scale position note by note, showing the next notes; tracks score, streak and time.
 - **String detection (experimental)**: calibrate once by plucking each open string; the app then measures each note's overtones (string stiffness / inharmonicity) to work out which string you played.
 - **Copy diagnostics**: copies the last 4 seconds of what the app heard, for troubleshooting.
 
@@ -56,4 +56,4 @@ To give testers a build first, tick **Set as a pre-release** instead. The app ig
 ### Notes
 
 - The installers are unsigned, so Windows SmartScreen shows "More info → Run anyway". On macOS, right-click the app → Open. If macOS says the app is "damaged", run `xattr -cr "/Applications/Guitar Visualizer.app"`.
-- On Raspberry Pi and other Linux systems, the AppImage needs `libfuse2` (`sudo apt install libfuse2`).
+- **Linux / Raspberry Pi:** use the `.deb` (`sudo apt install ./guitar-visualizer_<version>_arm64.deb` on a Pi, `_amd64.deb` on a PC) or the AppImage. The AppImage needs `libfuse2` (`sudo apt install libfuse2`).

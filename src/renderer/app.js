@@ -18,6 +18,7 @@
   if (!T.TUNINGS[state.tuning]) state.tuning = DEFAULTS.tuning;
   if (!T.SCALES[state.scale]) state.scale = DEFAULTS.scale;
   if (!T.CHORDS[state.chord]) state.chord = DEFAULTS.chord;
+  if (state.practiceType === 'run') state.practiceType = 'lesson';
   const save = () => { try { localStorage.setItem('gv-state', JSON.stringify(state)); } catch { /* ignore */ } };
 
   let voicingIndex = 0;
@@ -131,8 +132,8 @@
     }
 
     // Locked hand-position area
-    if (handLock() !== null) {
-      const lo = handLock(), hi = Math.min(N, lo + 4);
+    if (areaStart() !== null) {
+      const lo = areaStart(), hi = Math.min(N, lo + 4);
       const x1 = lo === 0 ? openX - 16 : fx(lo - 1), x2 = fx(hi);
       rect(x1, x2, boardTop - 6, boardBot - boardTop + 12, 'hand-area');
     }
@@ -183,7 +184,22 @@
       el('circle', { cx: geom.X(geom.noteX(p.f)), cy: geom.sy(p.s), r: 15, class: 'ring ' + cls }, liveLayer);
     playingMarks.forEach((p) => mark(p, 'playing'));
     const target = cal.active ? { s: cal.s, f: 0 } : practice.on ? practice.target : null;
-    if (target) mark(target, 'target');
+    if (practice.on && state.practiceType === 'lesson') {
+      // the next few notes of the lesson, numbered
+      practice.order.slice(practice.idx + 1, practice.idx + 4).forEach((p, i) => {
+        if (target && p.s === target.s && p.f === target.f) return;
+        mark(p, 'next next' + (i + 1));
+        const t = el('text', { x: geom.X(geom.noteX(p.f)) + 13, y: geom.sy(p.s) - 12, class: 'next-num' }, liveLayer);
+        t.textContent = i + 2;
+      });
+    }
+    if (target) {
+      mark(target, 'target');
+      if (practice.on && state.practiceType === 'lesson') {
+        const t = el('text', { x: geom.X(geom.noteX(target.f)) + 13, y: geom.sy(target.s) - 12, class: 'next-num now' }, liveLayer);
+        t.textContent = 1;
+      }
+    }
     if (liveMidi !== null) {
       const list = state.showAllLive ? positionsOf(liveMidi) : livePos ? [livePos] : [];
       list.forEach((p) => mark(p, 'live'));
@@ -240,9 +256,17 @@
     save();
     if (typeof updateStringsUi === 'function') updateStringsUi();
     // Scale, chord, tuning or Hand position changed: keep practice targets inside the new notes/area.
-    if (practice.on) {
-      practice.order = [];
-      practice.idx = 0;
+    if (practice.on && state.practiceType === 'lesson') {
+      const lock = handLock();
+      const want = lock !== null ? lock : T.defaultPosition(tuning(), state.root);
+      const order = T.scaleLesson(tuning(), activePcs(), want + 4 > state.frets ? 0 : want);
+      if (JSON.stringify(order) !== JSON.stringify(practice.order)) { // scale, root or position changed
+        practice.order = [];
+        nextTarget();
+        drawBoard();
+        renderPractice('Lesson restarted for the new scale/position.', '');
+      }
+    } else if (practice.on) {
       const t = practice.target;
       if (!t || !practicePool().some((p) => p.s === t.s && p.f === t.f)) nextTarget();
     }
@@ -413,8 +437,17 @@
     }
   }
 
-  // ---------------- Practice mode ----------------
-  const practice = { on: false, target: null, order: [], idx: 0, shownAt: 0, right: 0, wrong: 0, streak: 0, best: 0, times: [], lastWrongAt: 0 };
+  // ---------------- Practice mode & lessons ----------------
+  const practice = {
+    on: false, target: null, order: [], idx: 0, shownAt: 0, startedAt: 0, lessonStart: 0,
+    right: 0, wrong: 0, streak: 0, best: 0, times: [], lastWrongAt: 0,
+  };
+  const isLesson = () => practice.on && state.practiceType === 'lesson';
+  /** Start fret of the shaded area: the Hand position lock, or the running lesson's position. */
+  function areaStart() {
+    if (handLock() !== null) return handLock();
+    return isLesson() ? practice.lessonStart : null;
+  }
 
   function practicePool() {
     const lock = handLock();
@@ -423,27 +456,26 @@
     const pool = [];
     tuning().forEach((open, s) => {
       for (let f = lo; f <= hi; f++) {
-        if (f === 0 && lo > 0) continue;
         const midi = open + f;
         if (pcs.has(T.pc(midi))) pool.push({ s, f, midi });
       }
     });
-    if (lo > 0) tuning().forEach((open, s) => { if (pcs.has(T.pc(open)) && lo <= 1) pool.push({ s, f: 0, midi: open }); });
     return pool;
   }
 
-  function buildOrder() {
-    const byMidi = new Map();
-    for (const p of practicePool()) if (!byMidi.has(p.midi)) byMidi.set(p.midi, p); // lowest string first
-    const up = [...byMidi.values()].sort((a, b) => a.midi - b.midi);
-    return up.concat(up.slice(0, -1).reverse().slice(0, -1));
+  function startLesson() {
+    const lock = handLock();
+    practice.lessonStart = lock !== null ? lock : T.defaultPosition(tuning(), state.root);
+    if (practice.lessonStart + 4 > state.frets) practice.lessonStart = 0;
+    practice.order = T.scaleLesson(tuning(), activePcs(), practice.lessonStart);
+    practice.idx = 0;
+    practice.startedAt = performance.now();
   }
 
   function nextTarget() {
-    if (state.practiceType === 'run') {
-      if (!practice.order.length) practice.order = buildOrder();
-      practice.target = practice.order[practice.idx % practice.order.length] || null;
-      practice.idx++;
+    if (state.practiceType === 'lesson') {
+      if (!practice.order.length) startLesson();
+      practice.target = practice.order[practice.idx] || null;
     } else {
       const pool = practicePool().filter((p) => !practice.target || p.midi !== practice.target.midi);
       practice.target = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
@@ -454,11 +486,21 @@
   }
 
   function renderPractice(feedback, cls) {
-    $('practice-toggle').textContent = practice.on ? 'Stop practice' : 'Start practice';
+    $('practice-toggle').textContent = practice.on ? 'Stop' : state.practiceType === 'lesson' ? 'Start lesson' : 'Start practice';
     const t = practice.target;
-    $('practice-target').textContent = practice.on
-      ? (t ? `Play ${T.noteNameWithOctave(t.midi, state.flats)} — ${stringLabel(t.s)}, ${t.f === 0 ? 'open' : 'fret ' + t.f}` : 'No notes in this area — change the scale or Hand position')
-      : '–';
+    let head = '–';
+    if (practice.on && t) {
+      const where = `${stringLabel(t.s)}, ${t.f === 0 ? 'open' : 'fret ' + t.f}`;
+      head = state.practiceType === 'lesson'
+        ? `Note ${practice.idx + 1} of ${practice.order.length}: ${T.noteNameWithOctave(t.midi, state.flats)} — ${where}`
+        : `Play ${T.noteNameWithOctave(t.midi, state.flats)} — ${where}`;
+    } else if (practice.on) {
+      head = 'No notes in this area — change the scale or Hand position';
+    }
+    $('practice-target').textContent = head;
+    $('lesson-info').textContent = isLesson()
+      ? `${$('title').textContent.split(' — ')[0]}, frets ${practice.lessonStart}–${practice.lessonStart + 4}. Play each note in turn — the green circle is next, then 2, 3, 4.`
+      : '';
     if (feedback !== undefined) {
       $('practice-feedback').textContent = feedback;
       $('practice-feedback').className = cls || '';
@@ -476,14 +518,31 @@
       practice.on = false;
       practice.target = null;
       renderPractice('', '');
-      drawOverlay();
+      render();
       return;
     }
     if (!input.active) await startListening();
     if (!input.active) return;
     Object.assign(practice, { on: true, target: null, order: [], idx: 0, right: 0, wrong: 0, streak: 0, best: 0, times: [] });
     nextTarget();
-    renderPractice('Go!', '');
+    render(); // shade the lesson's area
+    renderPractice(state.practiceType === 'lesson' ? 'Start with note 1 (green circle).' : 'Go!', '');
+  }
+
+  function finishLesson(now) {
+    const secs = Math.round((now - practice.startedAt) / 1000);
+    const notes = practice.order.length;
+    practice.on = false;
+    practice.target = null;
+    renderPractice(`🎉 Lesson complete! ${notes} notes in ${secs} s with ${practice.wrong} mistake${practice.wrong === 1 ? '' : 's'}. Press Start lesson to go again.`, 'yes');
+    render();
+  }
+
+  /** In a lesson the app knows what should come next, so a played note can be placed exactly. */
+  function lessonPosition(midi) {
+    if (!isLesson()) return null;
+    const near = practice.order.slice(Math.max(0, practice.idx - 1), practice.idx + 4);
+    return near.find((p) => p.midi === midi) || null;
   }
 
   function practiceNoteOn(midi, now) {
@@ -496,6 +555,13 @@
       practice.times.push(now - practice.shownAt);
       if (practice.times.length > 20) practice.times.shift();
       livePos = { s: t.s, f: t.f }; // we know exactly where it was meant to be played
+      if (state.practiceType === 'lesson') {
+        practice.idx++;
+        if (practice.idx >= practice.order.length) return finishLesson(now);
+        nextTarget();
+        renderPractice('✓', 'yes');
+        return;
+      }
       renderPractice('✓ Correct!', 'yes');
       drawOverlay();
       const done = practice.target;
@@ -504,7 +570,8 @@
       practice.lastWrongAt = now;
       practice.wrong++;
       practice.streak = 0;
-      renderPractice(`✗ That was ${T.noteNameWithOctave(midi, state.flats)} — try ${T.noteNameWithOctave(t.midi, state.flats)}`, 'no');
+      const what = state.practiceType === 'lesson' ? 'next is' : 'try';
+      renderPractice(`✗ That was ${T.noteNameWithOctave(midi, state.flats)} — ${what} ${T.noteNameWithOctave(t.midi, state.flats)} (${stringLabel(t.s)}, ${t.f === 0 ? 'open' : 'fret ' + t.f})`, 'no');
     }
   }
 
@@ -650,7 +717,7 @@
       noteOnAt = now;
       lastOnset = gate.attackStart;
       const hand = now - handTime < 2000 ? handPos : null; // forget the hand after a 2 s pause
-      livePos = bestPosition(liveMidi, hand);
+      livePos = lessonPosition(liveMidi) || bestPosition(liveMidi, hand);
       if (livePos && livePos.f > 0) handPos = livePos; // open strings don't move the hand
       if (state.useStrings && calibration()) $('string-guess').textContent = '';
       practiceNoteOn(liveMidi, now);
@@ -843,7 +910,8 @@
     $('practice-type').onchange = (e) => {
       state.practiceType = e.target.value;
       save();
-      if (practice.on) { practice.order = []; practice.idx = 0; nextTarget(); }
+      if (practice.on) { practice.order = []; practice.idx = 0; nextTarget(); render(); }
+      renderPractice();
     };
     updateStringsUi();
     renderPractice();
