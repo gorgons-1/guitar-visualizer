@@ -57,3 +57,23 @@ test('scale run goes up an octave and back', () => {
   const run = T.buildRun(std, A, T.scalePcs(A, 'minorPentatonic'), 1);
   assert.deepEqual(run, [45, 48, 50, 52, 55, 57, 55, 52, 50, 48, 45]);
 });
+
+test('guessing the fret for a played note', () => {
+  const pos = (midi, hand) => T.guessPosition(std, 15, midi, hand);
+  const E4 = 64;
+  // no idea where the hand is -> open string
+  assert.deepEqual(pos(E4, null), { s: 5, f: 0 });
+  // hand around 5th fret on the A string -> still the open high E
+  assert.deepEqual(pos(E4, { s: 1, f: 5 }), { s: 5, f: 0 });
+  // hand on the B string at fret 5, playing there -> B string 5th fret
+  assert.deepEqual(pos(E4, { s: 4, f: 5 }), { s: 4, f: 5 });
+  // hand up at 9th fret on the G string -> G string 9th fret
+  assert.deepEqual(pos(E4, { s: 3, f: 9 }), { s: 3, f: 9 });
+  // A3 with hand at D string 7th fret -> D7, not A12 or G2
+  assert.deepEqual(pos(57, { s: 2, f: 7 }), { s: 2, f: 7 });
+  // B3: open B unless the hand is right there on the G string 4th fret
+  assert.deepEqual(pos(59, null), { s: 4, f: 0 });
+  assert.deepEqual(pos(59, { s: 3, f: 4 }), { s: 3, f: 4 });
+  // only one place for the open low E
+  assert.deepEqual(pos(40, { s: 3, f: 9 }), { s: 0, f: 0 });
+});

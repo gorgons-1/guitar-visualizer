@@ -164,9 +164,35 @@
 
   const formatVoicing = (v) => v.map((f) => (f === null ? 'x' : f)).join(' ');
 
+  /** Every place on the neck where this exact pitch can be played: [{s, f}]. */
+  function positionsOf(tuning, frets, midi) {
+    return tuning.map((open, s) => ({ s, f: midi - open })).filter((p) => p.f >= 0 && p.f <= frets);
+  }
+
+  /**
+   * Best guess of where a pitch was played (audio alone can't tell which string).
+   * hand: last fretted position {s, f}, or null if unknown (e.g. after a pause).
+   * - Open strings need no fretting hand, so they're always a cheap option.
+   * - Otherwise prefer notes inside the hand's reach (about frets f-1 .. f+3), on nearby strings.
+   * - With no hand info, the lowest fret wins (open strings first).
+   */
+  function guessPosition(tuning, frets, midi, hand) {
+    const options = positionsOf(tuning, frets, midi);
+    if (!options.length) return null;
+    const OPEN = 0.5;
+    const cost = (p) => {
+      if (!hand) return p.f;
+      if (p.f === 0) return OPEN; // open strings: no fretting hand needed, any position
+      const lo = Math.max(1, hand.f - 1), hi = hand.f + 3;
+      const outside = p.f < lo ? lo - p.f : p.f > hi ? p.f - hi : 0;
+      return outside + 0.3 * Math.abs(p.s - hand.s) + 0.05 * Math.abs(p.f - hand.f);
+    };
+    return options.reduce((a, b) => (cost(b) < cost(a) ? b : a));
+  }
+
   return {
     SHARPS, FLATS, INTERVALS, SCALES, CHORDS, TUNINGS,
     pc, noteName, noteNameWithOctave, intervalName, midiToFreq, freqToMidi,
-    scalePcs, chordPcs, fretboard, buildRun, findVoicings, formatVoicing,
+    scalePcs, chordPcs, fretboard, buildRun, findVoicings, formatVoicing, positionsOf, guessPosition,
   };
 });

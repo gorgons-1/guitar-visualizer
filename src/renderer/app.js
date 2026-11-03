@@ -23,7 +23,8 @@
   let voicingCache = { key: '', list: [] };
   let liveMidi = null;
   let livePos = null; // best-guess {s, f} for the note being played
-  let handPos = null; // last position played; used to guess where the hand is
+  let handPos = null; // last FRETTED position; used to guess where the hand is
+  let handTime = 0; // when a note was last heard (hand position is forgotten after a pause)
   let playingMarks = []; // [{s, f}] highlighted during playback
 
   const synth = new Synth();
@@ -179,20 +180,8 @@
     }
   }
 
-  /** Every place on the neck where this exact pitch can be played. */
-  function positionsOf(midi) {
-    return tuning()
-      .map((open, s) => ({ s, f: midi - open }))
-      .filter((p) => p.f >= 0 && p.f <= state.frets);
-  }
-
-  /** Most likely place this pitch was played: nearest to the previous note, else lowest fret. */
-  function bestPosition(midi, near) {
-    const options = positionsOf(midi);
-    if (!options.length) return null;
-    const cost = (p) => (near ? Math.abs(p.f - near.f) + 0.6 * Math.abs(p.s - near.s) : p.f);
-    return options.reduce((a, b) => (cost(b) < cost(a) ? b : a));
-  }
+  const positionsOf = (midi) => T.positionsOf(tuning(), state.frets, midi);
+  const bestPosition = (midi, hand) => T.guessPosition(tuning(), state.frets, midi, hand);
 
   // ---------------- Side panel ----------------
   function renderInfo() {
@@ -258,7 +247,7 @@
   }
 
   function playNote(midi, pos) {
-    handPos = pos; // clicking a fret also tells live input where your hand is
+    if (pos.f > 0) { handPos = pos; handTime = performance.now(); } // clicking a fret tells live input where your hand is
     synth.play(midi);
     flash([pos], 400);
   }
@@ -379,10 +368,12 @@
     }
     if (note.midi !== liveMidi) {
       liveMidi = note.midi;
-      livePos = bestPosition(liveMidi, handPos);
-      if (livePos) handPos = livePos;
+      const hand = now - handTime < 2000 ? handPos : null; // forget the hand after a 2 s pause
+      livePos = bestPosition(liveMidi, hand);
+      if (livePos && livePos.f > 0) handPos = livePos; // open strings don't move the hand
       drawOverlay();
     }
+    handTime = now;
     const f = note.freq;
     const cents = note.cents;
     if (liveMidi === null) return;
