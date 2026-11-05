@@ -10,7 +10,7 @@
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, flip: false, tempo: 120,
     device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
-    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, cofKey: null, lessonPos: 'all', countIn: true, alongSound: false,
+    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, scalePos: 'all', cofKey: null, lessonPos: 'all', countIn: true, alongSound: false,
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -148,6 +148,8 @@
     const pcSet = new Set(pcs);
     const voicing = state.mode === 'chord' ? currentVoicing() : null;
     const practiceOnly = practiceArea();
+    const box = scaleBoxNow();
+    const boxOnly = box ? new Set(box.notes.map((p) => p.s + ':' + p.f)) : null;
     // which finger plays each note of the chord shape (and a barre, if it needs one)
     const fing = voicing && !practice.on && !tabView() ? T.fingering(voicing) : null;
     if (fing && fing.barre) {
@@ -172,6 +174,7 @@
 
         if (tabView() || !pcSet.has(p)) continue;
         if (practiceOnly && !practiceOnly.has(s + ':' + f)) continue; // practising: only this area's notes
+        if (!practiceOnly && boxOnly && !boxOnly.has(s + ':' + f)) continue; // one scale position picked
         if (voicing && voicing[s] === null && f === 0) continue; // keep the × readable
         // Chord mode: only the shape being shown (other places for the chord's notes are hidden)
         if (voicing && voicing[s] !== f && !practice.on) continue;
@@ -500,6 +503,7 @@
     drawBoard();
     save();
     fillLessonPos();
+    fillScalePos();
     // Scale, chord or tuning changed: keep practice targets inside the new notes/area.
     if (practice.on && state.practiceType === 'lesson') {
       const order = T.scaleLesson(tuning(), activePcs(), lessonStartFor(practice.posIdx));
@@ -551,10 +555,20 @@
       flash(marks, 1500);
       return;
     }
-    const seq = state.mode === 'scale'
-      ? T.buildRun(tuning(), state.root, activePcs(), 1)
-      : T.buildRun(tuning(), state.root, activePcs(), 2);
     const step = beat / 2; // eighth notes
+    if (state.mode === 'scale') {
+      // Play a scale position the way it's played: low E string up to high e, then back down.
+      const list = scalePositionsNow();
+      const start = scaleBoxNow() ? scaleBoxNow().start : list.length ? list[0] : 0;
+      const order = T.scaleLesson(tuning(), activePcs(), start);
+      order.forEach((p, i) => {
+        synth.play(p.midi, i * step);
+        playTimers.push(setTimeout(() => { playingMarks = [{ s: p.s, f: p.f }]; drawOverlay(); }, i * step * 1000));
+      });
+      playTimers.push(setTimeout(() => { playingMarks = []; drawOverlay(); }, order.length * step * 1000 + 300));
+      return;
+    }
+    const seq = T.buildRun(tuning(), state.root, activePcs(), 2);
     let near = null;
     seq.forEach((m, i) => {
       const pos = bestPosition(m, near);
@@ -584,7 +598,36 @@
   /** Start fret of the shaded area: the running lesson's position. */
   function areaStart() {
     if (isLesson()) return practice.lessonStart;
+    const box = scaleBoxNow();
+    if (box && !practice.on) return box.start;
     return handLock();
+  }
+
+  // ---------------- Scale positions (boxes) ----------------
+  const scalePositionsNow = () => T.scalePositions(tuning(), activePcs(), state.frets, state.root);
+  /** The scale position picked in Scale mode: {index, start, notes} or null for the whole neck. */
+  function scaleBoxNow() {
+    if (state.mode !== 'scale' || state.scalePos === 'all' || tabView()) return null;
+    const list = scalePositionsNow();
+    if (!list.length) return null;
+    const index = Math.min(Number(state.scalePos), list.length - 1);
+    return { index, start: list[index], notes: T.scaleBox(tuning(), activePcs(), list[index]) };
+  }
+
+  function fillScalePos() {
+    $('scale-pos-row').classList.toggle('hidden', state.mode !== 'scale');
+    if (state.mode !== 'scale') return;
+    const list = scalePositionsNow();
+    if (state.scalePos !== 'all' && Number(state.scalePos) >= list.length) state.scalePos = 'all';
+    fillSelect($('scale-pos'), [['all', 'Whole neck']].concat(list.map((_, i) => [String(i), `Position ${i + 1}`])), state.scalePos);
+  }
+
+  function stepScalePos(d) {
+    const n = scalePositionsNow().length;
+    if (!n) return;
+    const cur = state.scalePos === 'all' ? (d > 0 ? -1 : n) : Number(state.scalePos);
+    state.scalePos = String((cur + d + n) % n);
+    render();
   }
 
   /** While practising, the only notes shown on the neck: the lesson's position, or the practice area. */
@@ -1564,6 +1607,9 @@ E|---------3-------3-------0-------|
     bind('flip', 'flip', Boolean);
 
     $('key-play').onclick = playProgression;
+    $('scale-pos').onchange = (e) => { state.scalePos = e.target.value; render(); };
+    $('pos-prev').onclick = () => stepScalePos(-1);
+    $('pos-next').onclick = () => stepScalePos(1);
     $('power-btn').onclick = () => {
       state.mode = 'chord';
       state.chord = state.chord === '5' ? 'maj' : '5';
@@ -1628,6 +1674,8 @@ E|---------3-------3-------0-------|
         return;
       }
       if (e.code === 'Space') { e.preventDefault(); playCurrent(); }
+      if (state.mode === 'scale' && e.code === 'ArrowRight') { e.preventDefault(); stepScalePos(1); }
+      if (state.mode === 'scale' && e.code === 'ArrowLeft') { e.preventDefault(); stepScalePos(-1); }
       if (state.mode === 'chord' && e.code === 'ArrowRight') $('next').click();
       if (state.mode === 'chord' && e.code === 'ArrowLeft') $('prev').click();
     });
