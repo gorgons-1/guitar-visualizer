@@ -153,9 +153,6 @@ footer { display: flex; gap: 12px; align-items: center; padding: 6px 16px; backg
 .cd-dot { stroke: rgba(0, 0, 0, .35); stroke-width: 1; }
 .cd-mark { fill: var(--muted); font-size: 11px; text-anchor: middle; dominant-baseline: central; }
 .cd-base { fill: var(--muted); font-size: 10px; text-anchor: end; dominant-baseline: central; }
-.shape-area { fill: rgba(95, 211, 141, .07); stroke: rgba(95, 211, 141, .45); stroke-width: 1.2; stroke-dasharray: 5 4; rx: 6; }
-.shape-area.alt { fill: rgba(79, 179, 217, .08); stroke: rgba(79, 179, 217, .5); }
-.shape-num { fill: var(--good); font-size: 12px; font-weight: 700; text-anchor: middle; }
 #power-btn.on { background: var(--accent); color: #1a1205; border-color: var(--accent); font-weight: 600; }
 
 /* Tab player */

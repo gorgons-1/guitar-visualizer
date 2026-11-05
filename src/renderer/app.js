@@ -10,7 +10,7 @@
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, tempo: 120,
     device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
-    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, showAllShapes: false, lessonPos: 'all', countIn: true, alongSound: false,
+    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, lessonPos: 'all', countIn: true, alongSound: false,
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -88,7 +88,7 @@
     const tun = tuning();
     const n = tun.length;
     const N = state.frets;
-    const W = 1200, gap = 34, top = 34; // room above the neck for shape numbers
+    const W = 1200, gap = 34, top = 26;
     const H = top * 2 + gap * (n - 1) + 26;
     const openX = 26, nutX = 56, endX = W - 14;
     const k = 1 - Math.pow(2, -N / 12);
@@ -146,21 +146,8 @@
     // Notes
     const pcs = activePcs();
     const pcSet = new Set(pcs);
-    const allShapes = state.mode === 'chord' && state.showAllShapes && !tabView() ? shapes() : null;
-    const voicing = state.mode === 'chord' && !allShapes ? currentVoicing() : null;
+    const voicing = state.mode === 'chord' ? currentVoicing() : null;
     const practiceOnly = practiceArea();
-    const inShape = allShapes ? new Set(allShapes.flatMap((sh) => sh.v.map((f, s) => (f === null ? null : s + ':' + f)).filter(Boolean))) : null;
-    if (allShapes) {
-      // each shape's area of the neck, numbered like the diagrams
-      allShapes.forEach((sh, i) => {
-        const fr = sh.v.filter((f) => f !== null);
-        const lo = Math.min(...fr), hi = Math.max(...fr);
-        const x1 = lo === 0 ? openX - 16 : fx(lo - 1) + 3, x2 = hi === 0 ? openX + 16 : fx(hi) - 3;
-        rect(x1, x2, boardTop - 4 + (i % 2) * 3, boardBot - boardTop + 8 - (i % 2) * 6, 'shape-area' + (i % 2 ? ' alt' : ''));
-        const t = el('text', { x: X((x1 + x2) / 2), y: boardTop - 8, class: 'shape-num' }, svg);
-        t.textContent = i + 1;
-      });
-    }
 
     for (let s = 0; s < n; s++) {
       if (voicing && voicing[s] === null && !tabView()) {
@@ -177,14 +164,11 @@
         el('title', {}, hit).textContent = T.noteNameWithOctave(midi, state.flats);
 
         if (tabView() || !pcSet.has(p)) continue;
-        if (inShape && !inShape.has(s + ':' + f)) continue;
         if (practiceOnly && !practiceOnly.has(s + ':' + f)) continue; // practising: only this area's notes
         if (voicing && voicing[s] === null && f === 0) continue; // keep the × readable
-        let ghost = false;
-        if (state.mode === 'chord' && !allShapes) {
-          if (!voicing) ghost = true;
-          else if (voicing[s] !== f) ghost = true;
-        }
+        // Chord mode: only the shape being shown (other places for the chord's notes are hidden)
+        if (voicing && voicing[s] !== f && !practice.on) continue;
+        const ghost = state.mode === 'chord' && !voicing;
         const semis = T.pc(p - state.root);
         el('circle', { cx, cy, r: 12, class: 'dot' + (ghost ? ' ghost' : ''), fill: colorFor(semis) }, svg);
         if (!ghost && state.labels !== 'none') {
@@ -282,7 +266,6 @@
     $('shapes-title').textContent = `${name(state.root)}${c.symbol} shapes up the neck`;
     $('power-btn').classList.toggle('on', power);
     $('power-btn').textContent = power ? '⚡ Power chords (on)' : '⚡ Power chords';
-    $('show-all-shapes').checked = state.showAllShapes;
     $('shapes-hint').textContent = power
       ? 'Power chords are just the root, the 5th and the octave, so they work with any key or style - the sound of rock and metal. Same shape anywhere on the neck: move it to change the chord. Mute the strings you don\'t play.'
       : 'The main ways to play this chord, from the nut up the neck. Click one to see it on the neck and hear it.';
@@ -313,7 +296,6 @@
     let idx = list.findIndex((x) => sameShape(x, v));
     if (idx < 0) { list.push(v); idx = list.length - 1; }
     voicingIndex = idx;
-    if (state.showAllShapes) state.showAllShapes = false; // focus on the one picked
     render();
     playCurrent();
   }
@@ -1435,7 +1417,6 @@ E|---------3-------3-------0-------|
       $('chord').value = state.chord;
       render();
     };
-    $('show-all-shapes').onchange = (e) => { state.showAllShapes = e.target.checked; render(); };
     $('prev').onclick = () => { const n = voicings().length; voicingIndex = (voicingIndex - 1 + n) % n; render(); };
     $('next').onclick = () => { voicingIndex = (voicingIndex + 1) % voicings().length; render(); };
     $('play').onclick = playCurrent;
