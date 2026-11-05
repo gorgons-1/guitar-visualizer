@@ -10,7 +10,7 @@
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, flip: false, tempo: 120,
     device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
-    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, section: 'home', scalePos: 'all', cofKey: null, lessonPos: 'all', countIn: true, alongSound: false,
+    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, section: 'home', scalePos: 'all', cofKey: null, countIn: true, alongSound: false,
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -671,7 +671,7 @@
   }
 
   const lessonPositions = () => T.scalePositions(tuning(), activePcs(), state.frets, state.root);
-  const lessonSingle = () => state.lessonPos !== 'all';
+  const lessonSingle = () => state.scalePos !== 'all';
   /** Start fret of lesson position i (0 = position 1). */
   function lessonStartFor(i) {
     const list = lessonPositions();
@@ -683,8 +683,8 @@
     const entries = [['all', 'Automatic (moves up through every position)']].concat(
       list.map((f, i) => [String(i), `Position ${i + 1}`]),
     );
-    if (state.lessonPos !== 'all' && Number(state.lessonPos) >= list.length) state.lessonPos = 'all';
-    fillSelect($('lesson-pos'), entries, state.lessonPos);
+    if (state.scalePos !== 'all' && Number(state.scalePos) >= list.length) state.scalePos = 'all';
+    fillSelect($('lesson-pos'), entries, state.scalePos);
     $('lesson-pos-row').classList.toggle('hidden', state.practiceType !== 'lesson');
   }
 
@@ -703,7 +703,7 @@
   }
 
   function startLesson() {
-    if (lessonSingle()) practice.posIdx = Number(state.lessonPos);
+    if (lessonSingle()) practice.posIdx = Number(state.scalePos);
     practice.lessonStart = lessonStartFor(practice.posIdx);
     practice.order = T.scaleLesson(tuning(), activePcs(), practice.lessonStart);
     practice.idx = 0;
@@ -1641,7 +1641,12 @@ E|---------3-------3-------0-------|
     bind('flip', 'flip', Boolean);
 
     $('key-play').onclick = playProgression;
-    $('scale-pos').onchange = (e) => { state.scalePos = e.target.value; render(); };
+    $('scale-pos').onchange = (e) => {
+      state.scalePos = e.target.value;
+      // same setting as the lesson's Positions menu
+      if (isLesson()) { practice.posIdx = lessonSingle() ? Number(state.scalePos) : 0; practice.order = []; practice.idx = 0; nextTarget(); }
+      render();
+    };
     $('pos-prev').onclick = () => stepScalePos(-1);
     $('pos-next').onclick = () => stepScalePos(1);
     $('power-btn').onclick = () => {
@@ -1676,16 +1681,17 @@ E|---------3-------3-------0-------|
     };
     $('practice-toggle').onclick = togglePractice;
     $('lesson-pos').onchange = (e) => {
-      state.lessonPos = e.target.value;
+      state.scalePos = e.target.value;
       save();
       if (isLesson()) {
-        practice.posIdx = lessonSingle() ? Number(state.lessonPos) : 0;
+        practice.posIdx = lessonSingle() ? Number(state.scalePos) : 0;
         practice.order = [];
         practice.idx = 0;
         nextTarget();
         render();
         renderPractice(`Now practising position ${practice.posIdx + 1}.`, '');
       }
+      render(); // the main page's Position menu shows the same choice
     };
     $('practice-type').value = state.practiceType;
     $('practice-type').onchange = (e) => {
