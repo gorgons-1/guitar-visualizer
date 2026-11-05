@@ -35,6 +35,8 @@
   // ---------------- Helpers ----------------
   const tuning = () => T.TUNINGS[state.tuning].notes;
   const name = (p) => T.noteName(p, state.flats);
+  /** A note's name as written in the current scale (A Phrygian has Bb, not A#), else its plain name. */
+  const noteLabel = (p) => (state.mode === 'scale' ? T.spellScale(state.root, state.scale, state.flats)[T.pc(p)] || name(p) : name(p));
   const activePcs = () => (state.mode === 'scale' ? T.scalePcs(state.root, state.scale) : T.chordPcs(state.root, state.chord));
 
   function colorFor(semis) {
@@ -137,8 +139,9 @@
     }
 
     // Locked hand-position area
-    if (areaStart() !== null) {
-      const lo = areaStart(), hi = Math.min(N, lo + 4);
+    const range = areaRange();
+    if (range) {
+      const lo = range[0], hi = Math.min(N, range[1]);
       const x1 = lo === 0 ? openX - 16 : fx(lo - 1), x2 = fx(hi);
       rect(x1, x2, boardTop - 6, boardBot - boardTop + 12, 'hand-area');
     }
@@ -183,7 +186,7 @@
         el('circle', { cx, cy, r: 12, class: 'dot' + (ghost ? ' ghost' : ''), fill: colorFor(semis) }, svg);
         if (!ghost && state.labels !== 'none') {
           const t = el('text', { x: cx, y: cy, class: 'dot-label' }, svg);
-          t.textContent = state.labels === 'intervals' ? T.INTERVALS[semis] : name(p);
+          t.textContent = state.labels === 'intervals' ? T.INTERVALS[semis] : noteLabel(p);
         }
         if (fing && fing.fingers[s] && voicing[s] === f) {
           const bx = cx + (state.lefty ? -15 : 15), by = cy - 12;
@@ -507,7 +510,7 @@
       const chip = document.createElement('span');
       chip.className = 'chip';
       chip.style.setProperty('--c', colorFor(semis));
-      chip.innerHTML = `${name(p)}<small>${T.INTERVALS[semis]}</small>`;
+      chip.innerHTML = `${noteLabel(p)}<small>${T.INTERVALS[semis]}</small>`;
       list.appendChild(chip);
     }
 
@@ -627,12 +630,16 @@
     right: 0, wrong: 0, streak: 0, best: 0, times: [], lastWrongAt: 0,
   };
   const isLesson = () => practice.on && state.practiceType === 'lesson';
-  /** Start fret of the shaded area: the running lesson's position. */
-  function areaStart() {
-    if (isLesson()) return practice.lessonStart;
+  const fretSpan = (notes) => {
+    const fr = notes.map((n) => n.f);
+    return fr.length ? [Math.min(...fr), Math.max(...fr)] : null;
+  };
+  /** [lowest, highest] fret of the shaded area: the running lesson's position or the picked scale position. */
+  function areaRange() {
+    if (isLesson()) return fretSpan(practice.order);
     const box = scaleBoxNow();
-    if (box && !practice.on) return box.start;
-    return handLock();
+    if (box && !practice.on) return fretSpan(box.notes);
+    return handLock() === null ? null : [handLock(), handLock() + 4];
   }
 
   // ---------------- Scale positions (boxes) ----------------

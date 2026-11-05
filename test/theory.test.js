@@ -112,7 +112,8 @@ test('scale lesson goes up the box and back down', () => {
 
 test('scale box: G major open position and default positions', () => {
   const box = T.scaleBox(std, T.scalePcs(G, 'major'), 0);
-  assert.ok(box.every((n) => n.f <= 4));
+  assert.ok(box.every((n) => n.f <= 5));
+  assert.ok([0, 1, 2, 3, 4, 5].every((st) => box.filter((n) => n.s === st).length === 3), '3 notes per string');
   assert.equal(new Set(box.map((n) => n.midi)).size, box.length, 'no repeated pitches');
   assert.equal(T.defaultPosition(std, A), 5); // A on the low E is fret 5
   assert.equal(T.defaultPosition(std, E), 0); // E is the open low E
@@ -176,4 +177,32 @@ test('circle of fifths: key signatures, relative minors and chords in a key', ()
   assert.deepEqual(g, ['G', 'Am', 'Bm', 'C', 'D', 'Em', 'F#dim']);
   const am = T.diatonicChords(9, true).map((c) => c.roman + ':' + T.SHARPS[c.rootPc] + T.CHORDS[c.chord].symbol);
   assert.deepEqual(am, ['i:Am', 'ii°:Bdim', 'III:C', 'iv:Dm', 'v:Em', 'VI:F', 'VII:G']);
+});
+
+test('scale positions are the standard shapes guitarists learn', () => {
+  const std = T.TUNINGS.standard.notes;
+  const shape = (r, id, start) => { const b = T.scaleBox(std, T.scalePcs(r, id), start); return [0, 1, 2, 3, 4, 5].map((s) => b.filter((n) => n.s === s).map((n) => n.f).join(',')).join(' | '); };
+  // A minor pentatonic: the five boxes
+  assert.equal(shape(9, 'minorPentatonic', 5), '5,8 | 5,7 | 5,7 | 5,7 | 5,8 | 5,8');
+  assert.equal(shape(9, 'minorPentatonic', 8), '8,10 | 7,10 | 7,10 | 7,9 | 8,10 | 8,10');
+  assert.equal(shape(9, 'minorPentatonic', 10), '10,12 | 10,12 | 10,12 | 9,12 | 10,13 | 10,12');
+  assert.equal(shape(9, 'minorPentatonic', 12), '12,15 | 12,15 | 12,14 | 12,14 | 13,15 | 12,15');
+  assert.equal(shape(9, 'minorPentatonic', 15), '15,17 | 15,17 | 14,17 | 14,17 | 15,17 | 15,17');
+  // A blues box 1: the pentatonic box plus the blue note (Eb) on the A and G strings
+  assert.equal(shape(9, 'blues', 5), '5,8 | 5,6,7 | 5,7 | 5,7,8 | 5,8 | 5,8');
+  assert.equal(T.scalePositions(std, T.scalePcs(9, 'blues'), 22, 9).length, 5, 'blues has the 5 pentatonic positions');
+  // G major, 3 notes per string from the root
+  assert.equal(shape(7, 'major', 3), '3,5,7 | 3,5,7 | 4,5,7 | 4,5,7 | 5,7,8 | 5,7,8');
+  // G major pentatonic box 1
+  assert.equal(shape(7, 'majorPentatonic', 3), '3,5 | 2,5 | 2,5 | 2,4 | 3,5 | 3,5');
+});
+
+test('scale note names use each letter once', () => {
+  const spell = (r, id, flats = false) => { const m = T.spellScale(r, id, flats); return T.scalePcs(r, id).map((p) => m[p]).join(' '); };
+  assert.equal(spell(9, 'phrygian'), 'A Bb C D E F G');
+  assert.equal(spell(0, 'lydian'), 'C D E F# G A B');
+  assert.equal(spell(9, 'blues'), 'A C D Eb E G');
+  assert.equal(spell(5, 'minor', true), 'F G Ab Bb C Db Eb');
+  assert.equal(spell(9, 'minorPentatonic'), 'A C D E G');
+  assert.equal(spell(4, 'major'), 'E F# G# A B C# D#');
 });

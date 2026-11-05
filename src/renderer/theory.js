@@ -280,16 +280,69 @@
    * Where the same pitch appears on two strings (only happens across the G-B gap) the higher
    * string is kept, as in the standard fingerings. start = 0 means open position (frets 0-4).
    */
-  function scaleBox(tuning, pcs, start) {
+  /**
+   * The "parent" notes used to build position shapes. A 6-note scale with an extra passing note
+   * (the blues scale's b5) uses the 5 notes without it; the extra note is added to the shape after.
+   */
+  function scaleBase(pcs) {
     const set = new Set(pcs.map(pc));
-    const lo = start, hi = start + 4;
+    if (set.size !== 6) return { base: [...set], extra: [] };
+    // the passing note has scale notes a semitone either side (blues: b5 between 4 and 5)
+    const x = [...set].find((p) => set.has(pc(p - 1)) && set.has(pc(p + 1)));
+    if (x === undefined) return { base: [...set], extra: [] };
+    return { base: [...set].filter((p) => p !== x), extra: [x] };
+  }
+
+  /** Old-style shape: every scale note in a 5-fret window (used for scales without a standard system). */
+  function windowBox(tuning, set, start) {
     const notes = [];
     tuning.forEach((open, s) => {
-      for (let f = lo; f <= hi; f++) if (set.has(pc(open + f))) notes.push({ s, f, midi: open + f });
+      for (let f = start; f <= start + 4; f++) if (set.has(pc(open + f))) notes.push({ s, f, midi: open + f });
     });
-    // Same pitch on two strings: keep the higher string (drop the lower-string occurrence).
     const kept = notes.filter((n) => !notes.some((m) => m.midi === n.midi && m.s > n.s));
     return kept.sort((a, b) => a.midi - b.midi);
+  }
+
+  /**
+   * A scale position as guitarists play it, starting on the lowest string at fret `start`:
+   * pentatonic scales use the standard 2-notes-per-string boxes, 7-note scales (major, minor,
+   * modes) use 3 notes per string, and the blues scale is the pentatonic box plus its blue note.
+   * Notes are in playing order (low string to high string, low to high pitch).
+   */
+  function scaleBox(tuning, pcs, start) {
+    const set = new Set(pcs.map(pc));
+    const { base, extra } = scaleBase(pcs);
+    const per = base.length === 5 ? 2 : base.length === 7 ? 3 : 0;
+    const baseSet = new Set(base);
+    if (!per || !baseSet.has(pc(tuning[0] + start))) return windowBox(tuning, set, start);
+    const next = (m) => { let x = m + 1; while (!baseSet.has(pc(x))) x++; return x; };
+    const notes = [];
+    let m = tuning[0] + start;
+    for (let s = 0; s < tuning.length; s++) {
+      for (let k = 0; k < per; k++) {
+        const f = m - tuning[s];
+        if (f < 0) return windowBox(tuning, set, start); // odd tuning: fall back
+        notes.push({ s, f, midi: m });
+        m = next(m);
+      }
+    }
+    // add passing notes (blues b5) between the notes they fall between, on the lower note's string
+    // if it's within reach, else on the next string
+    if (extra.length) {
+      const extraSet = new Set(extra);
+      const added = [];
+      for (let i = 0; i < notes.length - 1; i++) {
+        for (let x = notes[i].midi + 1; x < notes[i + 1].midi; x++) {
+          if (!extraSet.has(pc(x))) continue;
+          const lo = notes[i], hi = notes[i + 1];
+          const f1 = x - tuning[lo.s];
+          if (f1 - lo.f <= 3) added.push({ s: lo.s, f: f1, midi: x });
+          else added.push({ s: hi.s, f: x - tuning[hi.s], midi: x });
+        }
+      }
+      notes.push(...added);
+    }
+    return notes.sort((a, b) => a.midi - b.midi);
   }
 
   /** Lesson sequence: up the box and back down (top note not repeated). */
@@ -312,16 +365,48 @@
   function scalePositions(tuning, pcs, frets, rootPc) {
     const maxStart = Math.max(0, frets - 4);
     const root = defaultPosition(tuning, rootPc);
-    const set = new Set(pcs.map(pc));
+    const set = new Set(scaleBase(pcs).base);
+    const fits = (f) => scaleBox(tuning, pcs, f).every((n) => n.f <= frets);
     const starts = [];
     for (let f0 = 0; f0 < 12; f0++) {
       if (!set.has(pc(tuning[0] + f0))) continue;
       let f = f0;
-      if (f < root && f + 12 <= maxStart) f += 12;
-      if (f <= maxStart) starts.push(f);
+      if (f < root && f + 12 <= maxStart && fits(f + 12)) f += 12;
+      if (f <= maxStart && fits(f)) starts.push(f);
     }
     const rel = (f) => (f >= root ? f - root : f - root + 100); // below the root (no room to move up) goes last
     return [...new Set(starts)].sort((a, b) => rel(a) - rel(b));
+  }
+
+  /**
+   * Note names for a scale, spelled the way it's written: a 7-note scale uses each letter once
+   * (A Phrygian has Bb, not A#; C Lydian has F#, not Gb). Pentatonic and blues scales borrow the
+   * spelling of their parent major/minor scale. Returns a map pitch class -> name.
+   */
+  function spellScale(rootPc, scaleId, useFlats) {
+    const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    const NATURAL = [0, 2, 4, 5, 7, 9, 11];
+    const rootName = noteName(rootPc, useFlats);
+    const rootLetter = LETTERS.indexOf(rootName[0]);
+    const steps = SCALES[scaleId].steps;
+    // which letter (degree 0-6 above the root) each interval is written as
+    const DEGREE = {
+      major: [0, 1, 2, 3, 4, 5, 6], minor: [0, 1, 2, 3, 4, 5, 6],
+      majorPentatonic: [0, 1, 2, 4, 5], minorPentatonic: [0, 2, 3, 4, 6], blues: [0, 2, 3, 4, 4, 6],
+    }[scaleId] || (steps.length === 7 ? [0, 1, 2, 3, 4, 5, 6] : null);
+    const out = {};
+    if (!DEGREE) { steps.forEach((st) => { out[pc(rootPc + st)] = noteName(rootPc + st, useFlats); }); return out; }
+    steps.forEach((st, i) => {
+      const deg = scaleId === 'blues' && st === 6 ? 4 : DEGREE[i]; // blues b5 is written as a flat 5th
+      const L = (rootLetter + deg) % 7;
+      const target = pc(rootPc + st);
+      let diff = target - NATURAL[L];
+      if (diff > 6) diff -= 12;
+      if (diff < -6) diff += 12;
+      const acc = diff === 0 ? '' : diff > 0 ? '#'.repeat(diff) : 'b'.repeat(-diff);
+      out[target] = LETTERS[L] + acc;
+    });
+    return out;
   }
 
   // ---------------- Circle of fifths ----------------
@@ -399,6 +484,6 @@
   return {
     SHARPS, FLATS, INTERVALS, SCALES, CHORDS, TUNINGS, CIRCLE, circleIndex, keySignature, keyUsesFlats, diatonicChords,
     pc, noteName, noteNameWithOctave, intervalName, midiToFreq, freqToMidi,
-    scalePcs, chordPcs, fretboard, buildRun, findVoicings, chordShapes, powerShapes, fingering, formatVoicing, positionsOf, guessPosition, scaleBox, scalePositions, scaleLesson, defaultPosition,
+    scalePcs, chordPcs, fretboard, buildRun, findVoicings, chordShapes, powerShapes, fingering, formatVoicing, positionsOf, guessPosition, scaleBox, scaleBase, scalePositions, spellScale, scaleLesson, defaultPosition,
   };
 });
