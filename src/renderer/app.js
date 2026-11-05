@@ -579,6 +579,27 @@
     flash([pos], 400);
   }
 
+  /** Play a list of {s, f, midi} notes as eighth notes, lighting each one on the neck. */
+  function playOrder(order) {
+    clearPlayback();
+    const step = 60 / state.tempo / 2;
+    order.forEach((p, i) => {
+      synth.play(p.midi, i * step);
+      playTimers.push(setTimeout(() => { playingMarks = [{ s: p.s, f: p.f }]; drawOverlay(); }, i * step * 1000));
+    });
+    playTimers.push(setTimeout(() => { playingMarks = []; drawOverlay(); }, order.length * step * 1000 + 300));
+  }
+
+  let demoUntil = 0;
+  /** Practice card: play the position being practised (or the one picked), low E up to high e and back. */
+  function playLessonScale() {
+    let order;
+    if (isLesson() && practice.order.length) order = practice.order;
+    else order = T.scaleLesson(tuning(), activePcs(), lessonStartFor(lessonSingle() ? Number(state.scalePos) : 0));
+    playOrder(order.map((p) => ({ s: p.s, f: p.f, midi: p.midi !== undefined ? p.midi : tuning()[p.s] + p.f })));
+    demoUntil = performance.now() + (order.length * 30 / state.tempo + 1) * 1000;
+  }
+
   function playCurrent() {
     clearPlayback();
     const beat = 60 / state.tempo;
@@ -595,12 +616,7 @@
       // Play a scale position the way it's played: low E string up to high e, then back down.
       const list = scalePositionsNow();
       const start = scaleBoxNow() ? scaleBoxNow().start : list.length ? list[0] : 0;
-      const order = T.scaleLesson(tuning(), activePcs(), start);
-      order.forEach((p, i) => {
-        synth.play(p.midi, i * step);
-        playTimers.push(setTimeout(() => { playingMarks = [{ s: p.s, f: p.f }]; drawOverlay(); }, i * step * 1000));
-      });
-      playTimers.push(setTimeout(() => { playingMarks = []; drawOverlay(); }, order.length * step * 1000 + 300));
+      playOrder(T.scaleLesson(tuning(), activePcs(), start));
       return;
     }
     const seq = T.buildRun(tuning(), state.root, activePcs(), 2);
@@ -675,6 +691,12 @@
     if (isLesson()) return new Set(practice.order.map((p) => p.s + ':' + p.f));
     if (handLock() === null) return null;
     return new Set(practicePool().map((p) => p.s + ':' + p.f));
+  }
+
+  /** The main card and the practice card share one tempo. */
+  function syncTempo() {
+    $('tempo').value = state.tempo; $('tempo-val').textContent = state.tempo;
+    $('lesson-tempo').value = state.tempo; $('lesson-tempo-val').textContent = state.tempo;
   }
 
   const lessonPositions = () => T.scalePositions(tuning(), activePcs(), state.frets, state.root);
@@ -814,6 +836,7 @@
   function practiceNoteOn(midi, now) {
     const t = practice.target;
     if (!practice.on || !t) return;
+    if (performance.now() < demoUntil) return; // the app is playing the scale itself; don't score it
     if (midi === t.midi) {
       practice.right++;
       practice.streak++;
@@ -1621,8 +1644,7 @@ E|---------3-------3-------0-------|
     $('flats').checked = state.flats;
     $('lefty').checked = state.lefty;
     $('flip').checked = state.flip;
-    $('tempo').value = state.tempo;
-    $('tempo-val').textContent = state.tempo;
+    syncTempo();
     $('channel').value = state.channel;
     $('monitor').checked = state.monitor;
     $('guitar-only').checked = state.guitarOnly;
@@ -1666,7 +1688,7 @@ E|---------3-------3-------0-------|
     $('prev').onclick = () => { const n = voicings().length; voicingIndex = (voicingIndex - 1 + n) % n; render(); };
     $('next').onclick = () => { voicingIndex = (voicingIndex + 1) % voicings().length; render(); };
     $('play').onclick = playCurrent;
-    $('tempo').oninput = (e) => { state.tempo = Number(e.target.value); $('tempo-val').textContent = state.tempo; save(); };
+    $('tempo').oninput = (e) => { state.tempo = Number(e.target.value); syncTempo(); save(); };
 
     $('device').onchange = (e) => { state.device = e.target.value; save(); restartIfListening(); };
     $('channel').onchange = (e) => { state.channel = e.target.value; save(); restartIfListening(); };
@@ -1687,6 +1709,8 @@ E|---------3-------3-------0-------|
       $('chord-feedback').className = 'chord-feedback';
     };
     $('practice-toggle').onclick = togglePractice;
+    $('lesson-play').onclick = playLessonScale;
+    $('lesson-tempo').oninput = (e) => { state.tempo = Number(e.target.value); syncTempo(); save(); };
     $('lesson-pos').onchange = (e) => {
       state.scalePos = e.target.value;
       save();
