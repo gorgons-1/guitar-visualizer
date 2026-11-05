@@ -16,6 +16,7 @@
 
   <header class="toolbar">
     <div class="group">
+      <button id="menu-btn" class="menu-btn" title="Menu" aria-label="Open menu" aria-expanded="false">&#9776;</button>
       <label>Mode
         <select id="mode">
           <option value="scale">Scale</option>
@@ -29,6 +30,27 @@
     </div>
     <div class="group">
       <label>Tuning <select id="tuning"></select></label>
+      <button id="listen-chip" class="listen-chip hidden" title="The app is listening to your guitar - click for Input &amp; tuner">&#127908; Listening</button>
+      <span id="section-name" class="section-name"></span>
+    </div>
+  </header>
+
+
+  <div id="drawer-backdrop" class="drawer-backdrop hidden"></div>
+  <nav id="drawer" class="drawer" aria-label="Menu">
+    <div class="drawer-head">
+      <b>Guitar Visualizer</b>
+      <button id="drawer-close" class="ghost" aria-label="Close menu">&times;</button>
+    </div>
+    <div class="drawer-items">
+      <button class="nav-item" data-go="home">&#127928; Scales &amp; chords</button>
+      <button class="nav-item" data-go="tab">&#127932; Tab player</button>
+      <button class="nav-item" data-go="circle">&#11093; Circle of fifths</button>
+      <button class="nav-item" data-go="practice">&#127919; Practice &amp; lessons</button>
+      <button class="nav-item" data-go="input">&#127908; Input &amp; tuner</button>
+    </div>
+    <div class="drawer-settings">
+      <h3>Neck settings</h3>
       <label>Frets
         <select id="frets">
           <option>12</option><option>15</option><option>17</option>
@@ -46,7 +68,7 @@
       <label class="check"><input type="checkbox" id="lefty"> Left-handed</label>
       <label class="check" title="Off: thin high e on top, like tab and looking down at your guitar. On: thick low E on top."><input type="checkbox" id="flip"> Flip strings</label>
     </div>
-  </header>
+  </nav>
 
   <main>
     <section class="board-wrap">
@@ -55,7 +77,7 @@
     </section>
 
     <section class="panels">
-      <div class="card wide" id="shapes-card">
+      <div class="card wide" id="shapes-card" data-section="home">
         <div class="row spread">
           <h2 id="shapes-title">Chord shapes</h2>
           <div class="row">
@@ -70,7 +92,7 @@
         <div id="chord-feedback" class="chord-feedback"></div>
         <div id="shapes" class="shapes"></div>
       </div>
-      <div class="card wide" id="tab-card">
+      <div class="card wide" id="tab-card" data-section="tab">
         <h2>Tab player</h2>
         <p class="hint">Paste a guitar tab (the text kind, with a line per string like <code>e|---0---3---|</code>) or open a .txt tab file. Each step is shown on the neck, with the next few numbered.</p>
         <div class="row">
@@ -108,7 +130,7 @@
         </div>
       </div>
 
-      <div class="card wide" id="circle-card">
+      <div class="card wide" id="circle-card" data-section="circle">
         <h2>Circle of fifths</h2>
         <div class="circle-wrap">
           <svg id="circle" viewBox="0 0 400 400" role="img" aria-label="Circle of fifths"></svg>
@@ -124,7 +146,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card wide" id="main-card" data-section="home">
         <h2 id="title"></h2>
         <div id="notes-list" class="chips"></div>
         <div id="scale-pos-row" class="row">
@@ -148,8 +170,8 @@
         <p class="hint">Tip: click any fret to hear that note.</p>
       </div>
 
-      <div class="card">
-        <h2>Live input</h2>
+      <div class="card wide" id="input-card" data-section="input">
+        <h2>Input &amp; tuner</h2>
         <div class="row">
           <label class="grow">Input device <select id="device"></select></label>
           <button id="refresh-devices" class="ghost" title="Refresh device list">&#8635;</button>
@@ -187,7 +209,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card wide" id="practice-card" data-section="practice">
         <h2>Practice &amp; lessons</h2>
         <div class="row">
           <label>Exercise

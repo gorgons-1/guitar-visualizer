@@ -17,6 +17,8 @@ A desktop app for exploring the guitar fretboard.
 - **Practice & lessons**: *Find the note* (random targets) or a *Scale lesson* that walks you up and down each scale position note by note, showing only that position's notes and the next notes to play, then moves up the neck to the next position automatically (or pick one position to drill); tracks score, streak and time.
 - **Copy diagnostics**: copies the last 4 seconds of what the app heard, for troubleshooting.
 
+The main page shows the neck and the scale/chord tools. Open the **☰ menu** (top left) for the Tab player, Circle of fifths, Practice & lessons, Input & tuner, and the neck settings (frets, labels, flats, left-handed, flip strings).
+
 ## Development
 
 ```bash

@@ -10,7 +10,7 @@
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, flip: false, tempo: 120,
     device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
-    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, scalePos: 'all', cofKey: null, lessonPos: 'all', countIn: true, alongSound: false,
+    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, section: 'home', scalePos: 'all', cofKey: null, lessonPos: 'all', countIn: true, alongSound: false,
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -452,6 +452,38 @@
     playTimers.push(setTimeout(() => { playingMarks = []; drawOverlay(); }, seq.length * beat * 1000));
   }
 
+
+  // ---------------- Menu & sections ----------------
+  const SECTIONS = { home: 'Scales & chords', tab: 'Tab player', circle: 'Circle of fifths', practice: 'Practice & lessons', input: 'Input & tuner' };
+  function openMenu(open) {
+    $('drawer').classList.toggle('open', open);
+    $('drawer-backdrop').classList.toggle('hidden', !open);
+    $('menu-btn').setAttribute('aria-expanded', String(open));
+  }
+  function showSection(name) {
+    if (!SECTIONS[name]) name = 'home';
+    const leaving = state.section;
+    state.section = name;
+    // Leaving a section stops what it was doing, so the neck shows the new section's notes
+    if (leaving === 'tab' && name !== 'tab') { stopTab(); if (tab.follow) setFollow(false); }
+    if (leaving === 'practice' && name !== 'practice' && practice.on) togglePractice();
+    document.querySelectorAll('[data-section]').forEach((c) => c.classList.toggle('off-section', c.dataset.section !== name));
+    document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.go === name));
+    $('section-name').textContent = name === 'home' ? '' : '› ' + SECTIONS[name];
+    openMenu(false);
+    render();
+    document.querySelector('main').scrollTop = 0;
+  }
+  function setupMenu() {
+    $('menu-btn').onclick = () => openMenu(!$('drawer').classList.contains('open'));
+    $('drawer-close').onclick = () => openMenu(false);
+    $('drawer-backdrop').onclick = () => openMenu(false);
+    document.querySelectorAll('.nav-item').forEach((b) => { b.onclick = () => showSection(b.dataset.go); });
+    $('listen-chip').onclick = () => showSection('input');
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMenu(false); });
+    showSection(state.section);
+  }
+
   // ---------------- Side panel ----------------
   function renderInfo() {
     const isScale = state.mode === 'scale';
@@ -855,7 +887,7 @@
     along: false, counting: false, results: [], best: 0, pass: 0 };
   const tabShown = () => !!(tab.song && tab.song.events.length);
   /** The neck shows the tab (not the scale) unless practice is running. */
-  const tabView = () => tabShown() && !practice.on;
+  const tabView = () => tabShown() && !practice.on && state.section === 'tab';
   const tabEvent = (i = tab.idx) => (tab.song && tab.song.events[i]) || null;
   const tabMidis = (ev) => ev.notes.map((n) => tuning()[n.s] + n.pitch);
   const TECH_SHORT = { 'hammer-on': 'h', 'pull-off': 'p', 'slide up': '/', 'slide down': '\\', slide: 's', bend: 'b', release: 'r', tap: 't' };
@@ -1494,6 +1526,7 @@ E|---------3-------3-------0-------|
       setThreshold();
       gate.reset();
       $('listen').textContent = '■ Stop listening';
+      $('listen-chip').classList.remove('hidden');
       refreshDevices(); // labels become visible once permission is granted
     } catch (err) {
       $('input-error').textContent =
@@ -1506,6 +1539,7 @@ E|---------3-------3-------0-------|
   function stopListening() {
     input.stop();
     $('listen').textContent = '🎤 Start listening';
+    $('listen-chip').classList.add('hidden');
     $('level').style.width = '0%';
     gate.reset();
     clearDetected();
@@ -1667,7 +1701,7 @@ E|---------3-------3-------0-------|
 
     document.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (tabShown()) {
+      if (tabView()) {
         if (e.code === 'Space') { e.preventDefault(); playTab(); }
         if (e.code === 'ArrowRight') { e.preventDefault(); $('tab-next').click(); }
         if (e.code === 'ArrowLeft') { e.preventDefault(); $('tab-prev').click(); }
@@ -1684,6 +1718,7 @@ E|---------3-------3-------0-------|
     setupUpdates();
     render();
     setupTab();
+    setupMenu();
   }
 
   init();
