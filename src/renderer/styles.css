@@ -151,6 +151,11 @@ footer { display: flex; gap: 12px; align-items: center; padding: 6px 16px; backg
 .cd-fret { stroke: #6c7078; stroke-width: 1; }
 .cd-nut { stroke: #ece6da; stroke-width: 4; }
 .cd-dot { stroke: rgba(0, 0, 0, .35); stroke-width: 1; }
+.cd-finger { fill: #111; font-size: 9px; font-weight: 700; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.cd-barre { fill: rgba(232, 223, 207, .45); }
+.barre { fill: rgba(232, 223, 207, .35); stroke: rgba(232, 223, 207, .7); stroke-width: 1; pointer-events: none; }
+.finger { fill: #fff; stroke: #111; stroke-width: 1; pointer-events: none; }
+.finger-num { fill: #111; font-size: 10px; font-weight: 800; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .cd-mark { fill: var(--muted); font-size: 11px; text-anchor: middle; dominant-baseline: central; }
 .cd-base { fill: var(--muted); font-size: 10px; text-anchor: end; dominant-baseline: central; }
 #power-btn.on { background: var(--accent); color: #1a1205; border-color: var(--accent); font-weight: 600; }

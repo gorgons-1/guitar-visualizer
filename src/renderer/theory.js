@@ -224,6 +224,54 @@
       .map((p) => ({ v: p.v, label: p.i.pos === 0 ? 'Open' : `Fret ${p.i.pos}` }));
   }
 
+  /**
+   * Which finger frets each note of a chord shape (1 = index ... 4 = little finger).
+   * Uses one finger per fret from the lowest fret, a first-finger barre when needed, and keeps
+   * fingers in order up the neck. Returns {fingers, barre} where fingers[s] is 1-4 or null
+   * (open / muted) and barre is {fret, from, to} (string indexes) or null; null if unplayable.
+   */
+  function fingering(v) {
+    const notes = v.map((f, s) => ({ s, f })).filter((x) => x.f !== null && x.f > 0);
+    const fingers = v.map(() => null);
+    if (!notes.length) return { fingers, barre: null };
+    const minF = Math.min(...notes.map((x) => x.f));
+    const assign = (list, start) => {
+      const sorted = list.slice().sort((a, b) => a.f - b.f || a.s - b.s);
+      let prev = start - 1;
+      const out = [];
+      for (let k = 0; k < sorted.length; k++) {
+        const ideal = sorted[k].f - minF + 1;
+        const room = 4 - (sorted.length - 1 - k); // leave a finger for each note still to come
+        const fin = Math.max(prev + 1, Math.min(ideal, room));
+        if (fin > 4) return null;
+        out.push([sorted[k].s, fin]);
+        prev = fin;
+      }
+      return out;
+    };
+    const atMin = notes.filter((x) => x.f === minF);
+    const tryBarre = () => {
+      if (atMin.length < 2) return null;
+      const from = Math.min(...atMin.map((x) => x.s)), to = Math.max(...atMin.map((x) => x.s));
+      // the barre presses every string between, so none of them can be open
+      for (let s = from; s <= to; s++) if (v[s] === 0) return null;
+      const rest = assign(notes.filter((x) => x.f !== minF), 2);
+      return rest ? { rest, barre: { fret: minF, from, to } } : null;
+    };
+    let plan = notes.length <= 4 ? assign(notes, 1) : null;
+    let barre = null;
+    if (!plan) {
+      const b = tryBarre();
+      if (!b) return null;
+      plan = b.rest;
+      barre = b.barre;
+      atMin.forEach((x) => { fingers[x.s] = 1; });
+      for (let s = barre.from; s <= barre.to; s++) if (v[s] === minF) fingers[s] = 1;
+    }
+    plan.forEach(([s, fin]) => { fingers[s] = fin; });
+    return { fingers, barre };
+  }
+
   const formatVoicing = (v) => v.map((f) => (f === null ? 'x' : f)).join(' ');
 
   /**
@@ -315,6 +363,6 @@
   return {
     SHARPS, FLATS, INTERVALS, SCALES, CHORDS, TUNINGS,
     pc, noteName, noteNameWithOctave, intervalName, midiToFreq, freqToMidi,
-    scalePcs, chordPcs, fretboard, buildRun, findVoicings, chordShapes, powerShapes, formatVoicing, positionsOf, guessPosition, scaleBox, scalePositions, scaleLesson, defaultPosition,
+    scalePcs, chordPcs, fretboard, buildRun, findVoicings, chordShapes, powerShapes, fingering, formatVoicing, positionsOf, guessPosition, scaleBox, scalePositions, scaleLesson, defaultPosition,
   };
 });

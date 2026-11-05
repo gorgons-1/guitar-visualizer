@@ -147,3 +147,20 @@ test('power chord shapes: root on the 6th, 5th and 4th strings', () => {
   // Drop D: one-finger power chords
   assert.ok(T.chordShapes(T.TUNINGS.dropD.notes, 7, '5', 22).map((x) => T.formatVoicing(x.v)).includes('5 5 5 x x x'));
 });
+
+test('finger numbers for common chord shapes', () => {
+  const fin = (v) => { const r = T.fingering(v); return r && r.fingers.map((x) => (x === null ? '-' : x)).join(''); };
+  const X = null;
+  assert.equal(fin([X, 3, 2, 0, 1, 0]), '-32-1-', 'open C');
+  assert.equal(fin([3, 2, 0, 0, 0, 3]), '21---3', 'open G');
+  assert.equal(fin([X, X, 0, 2, 3, 2]), '---132', 'open D');
+  assert.equal(fin([0, 2, 2, 1, 0, 0]), '-231--', 'open E');
+  assert.equal(fin([X, 0, 2, 2, 1, 0]), '--231-', 'open Am');
+  assert.equal(fin([X, X, 5, 7, 8, 7]), '--1243', 'D shape at 5');
+  assert.equal(fin([3, 5, 5, 4, 3, 3]), '134211', 'E-shape barre');
+  assert.deepEqual(T.fingering([3, 5, 5, 4, 3, 3]).barre, { fret: 3, from: 0, to: 5 });
+  assert.equal(fin([X, 10, 9, 7, 8, 7]), '-43121', 'C shape at 7');
+  assert.equal(fin([1, 3, 3, 2, 1, 1]), '134211', 'F barre');
+  assert.equal(fin([3, 5, 5, X, X, X]), '134---', 'power chord');
+  assert.equal(T.fingering([3, 5, 5, X, X, X]).barre, null);
+});

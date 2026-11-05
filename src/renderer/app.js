@@ -148,6 +148,13 @@
     const pcSet = new Set(pcs);
     const voicing = state.mode === 'chord' ? currentVoicing() : null;
     const practiceOnly = practiceArea();
+    // which finger plays each note of the chord shape (and a barre, if it needs one)
+    const fing = voicing && !practice.on && !tabView() ? T.fingering(voicing) : null;
+    if (fing && fing.barre) {
+      const bx = X(noteX(fing.barre.fret));
+      const y1 = sy(fing.barre.to), y2 = sy(fing.barre.from);
+      el('rect', { x: bx - 9, y: Math.min(y1, y2) - 9, width: 18, height: Math.abs(y2 - y1) + 18, rx: 9, class: 'barre' }, svg);
+    }
 
     for (let s = 0; s < n; s++) {
       if (voicing && voicing[s] === null && !tabView()) {
@@ -174,6 +181,12 @@
         if (!ghost && state.labels !== 'none') {
           const t = el('text', { x: cx, y: cy, class: 'dot-label' }, svg);
           t.textContent = state.labels === 'intervals' ? T.INTERVALS[semis] : name(p);
+        }
+        if (fing && fing.fingers[s] && voicing[s] === f) {
+          const bx = cx + (state.lefty ? -15 : 15), by = cy - 12;
+          el('circle', { cx: bx, cy: by, r: 8, class: 'finger' }, svg);
+          const t = el('text', { x: bx, y: by, class: 'finger-num' }, svg);
+          t.textContent = fing.fingers[s];
         }
       }
     }
@@ -230,7 +243,7 @@
     const hi = fr.length ? Math.max(...fr) : 0, lo = fr.length ? Math.min(...fr) : 0;
     const base = hi <= 4 ? 1 : lo; // show the nut when the shape fits in the first frets
     const rows = Math.max(4, hi - base + 1);
-    const gx = 13, gy = 17, left = 22, top = 22;
+    const gx = 15, gy = 18, left = 24, top = 22;
     const W = left + gx * (n - 1) + 12, H = top + gy * rows + 6;
     const svgEl = document.createElementNS(SVGNS, 'svg');
     svgEl.setAttribute('width', W);
@@ -245,6 +258,12 @@
       const t = el('text', { x: Math.min(sx(0), sx(n - 1)) - 6, y: top + gy / 2, class: 'cd-base' }, svgEl);
       t.textContent = base + 'fr';
     }
+    const fing = T.fingering(v);
+    if (fing && fing.barre) {
+      const y = top + (fing.barre.fret - base + 0.5) * gy;
+      const xa = sx(fing.barre.from), xb = sx(fing.barre.to);
+      el('rect', { x: Math.min(xa, xb) - 6.5, y: y - 6.5, width: Math.abs(xb - xa) + 13, height: 13, rx: 6.5, class: 'cd-barre' }, svgEl);
+    }
     v.forEach((f, s) => {
       if (f === null || f === 0) {
         const t = el('text', { x: sx(s), y: top - 9, class: 'cd-mark' }, svgEl);
@@ -252,7 +271,12 @@
         return;
       }
       const semis = T.pc(tun[s] + f - state.root);
-      el('circle', { cx: sx(s), cy: top + (f - base + 0.5) * gy, r: 5.5, class: 'cd-dot', fill: colorFor(semis) }, svgEl);
+      const cy = top + (f - base + 0.5) * gy;
+      el('circle', { cx: sx(s), cy, r: 6.5, class: 'cd-dot', fill: colorFor(semis) }, svgEl);
+      if (fing && fing.fingers[s]) {
+        const t = el('text', { x: sx(s), y: cy, class: 'cd-finger' }, svgEl);
+        t.textContent = fing.fingers[s];
+      }
     });
     return svgEl;
   }
@@ -269,6 +293,7 @@
     $('shapes-hint').textContent = power
       ? 'Power chords are just the root, the 5th and the octave, so they work with any key or style - the sound of rock and metal. Same shape anywhere on the neck: move it to change the chord. Mute the strings you don\'t play.'
       : 'The main ways to play this chord, from the nut up the neck. Click one to see it on the neck and hear it.';
+    $('shapes-hint').textContent += ' Small numbers are fingers: 1 index, 2 middle, 3 ring, 4 little. A long bar means a barre (lay finger 1 flat across those strings).';
     const box = $('shapes');
     box.innerHTML = '';
     const list = shapes();
