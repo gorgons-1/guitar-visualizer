@@ -8,7 +8,7 @@
   // ---------------- State ----------------
   const DEFAULTS = {
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
-    frets: 15, labels: 'notes', flats: false, lefty: false, tempo: 120,
+    frets: 15, labels: 'notes', flats: false, lefty: false, flip: false, tempo: 120,
     device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
     practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, lessonPos: 'all', countIn: true, alongSound: false,
   };
@@ -94,13 +94,13 @@
     const k = 1 - Math.pow(2, -N / 12);
     const fx = (f) => nutX + ((endX - nutX) * (1 - Math.pow(2, -f / 12))) / k;
     const X = (x) => (state.lefty ? W - x : x);
-    const sy = (s) => top + (n - 1 - s) * gap; // high string on top
+    const sy = (s) => top + (state.flip ? s : n - 1 - s) * gap; // high string on top (flipped: low string on top)
     const noteX = (f) => (f === 0 ? openX : (fx(f - 1) + fx(f)) / 2);
     geom = { X, sy, noteX };
 
     svg.innerHTML = '';
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    const boardTop = sy(n - 1) - 14, boardBot = sy(0) + 14;
+    const boardTop = Math.min(sy(0), sy(n - 1)) - 14, boardBot = Math.max(sy(0), sy(n - 1)) + 14;
     const rect = (x1, x2, y, h, cls) =>
       el('rect', { x: Math.min(X(x1), X(x2)), y, width: Math.abs(X(x2) - X(x1)), height: h, class: cls }, svg);
 
@@ -1410,6 +1410,7 @@ E|---------3-------3-------0-------|
     $('labels').value = state.labels;
     $('flats').checked = state.flats;
     $('lefty').checked = state.lefty;
+    $('flip').checked = state.flip;
     $('tempo').value = state.tempo;
     $('tempo-val').textContent = state.tempo;
     $('channel').value = state.channel;
@@ -1434,6 +1435,7 @@ E|---------3-------3-------0-------|
     bind('labels', 'labels');
     bind('flats', 'flats', Boolean, fillRootSelect);
     bind('lefty', 'lefty', Boolean);
+    bind('flip', 'flip', Boolean);
 
     $('power-btn').onclick = () => {
       state.mode = 'chord';

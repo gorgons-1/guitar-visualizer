@@ -7,7 +7,7 @@ A desktop app for exploring the guitar fretboard.
 - **Chord shapes**: the 5 main shapes of any chord up the neck (the CAGED shapes for major chords) as chord diagrams. Click one to see and hear it on the neck. Finger numbers (1 index … 4 little) and barres are shown on the neck and in the diagrams.
 - **Power chords**: one click shows power chord shapes with the root on the 6th, 5th and 4th strings (one-finger shapes in Drop tunings).
 - **Arpeggios**: chord tones shown across the whole neck.
-- **Tunings**: standard, drop D/C, Eb, D standard, DADGAD, open G/D/E, 7-string and 4-string bass, with a left-handed view.
+- **Tunings**: standard, drop D/C, Eb, D standard, DADGAD, open G/D/E, 7-string and 4-string bass, with a left-handed view and a *Flip strings* option (low E on top).
 - **Sound**: click any fret to hear it, or press **Play** (or Space) to hear the scale, arpeggio or chord.
 - **Live input**: choose a microphone or USB guitar interface and the input channel. A tuner shows the note you play and whether it is in key.
 - **Chord check**: in Chord mode, tick *Check my chord when I strum* and the app tells you if the chord is right, or what's wrong (missing note, extra note, which string to fix).
