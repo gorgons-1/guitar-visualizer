@@ -118,3 +118,13 @@ test('scale box: G major open position and default positions', () => {
   assert.equal(T.defaultPosition(std, E), 0); // E is the open low E
   assert.equal(T.defaultPosition(std, G), 3);
 });
+
+test('scale positions climb the neck from the root', () => {
+  const std = T.TUNINGS.standard.notes;
+  const pent = T.scalePcs(9, 'minorPentatonic'); // A minor pentatonic
+  assert.deepEqual(T.scalePositions(std, pent, 22, 9), [5, 8, 10, 12, 15]);
+  assert.deepEqual(T.scalePositions(std, pent, 15, 9), [5, 8, 10, 0, 3], 'short neck: lower positions come last');
+  assert.deepEqual(T.scalePositions(std, T.scalePcs(4, 'minorPentatonic'), 22, 4), [0, 3, 5, 7, 10], 'E: starts open');
+  assert.equal(T.scalePositions(std, T.scalePcs(7, 'major'), 22, 7).length, 7, 'a 7-note scale has 7 positions');
+  assert.equal(T.scalePositions(std, T.scalePcs(7, 'major'), 22, 7)[0], 3);
+});

@@ -194,6 +194,26 @@
     return f === 0 ? 0 : f;
   }
 
+  /**
+   * The scale's positions up the neck, as start frets of 5-fret boxes. Position 1 starts on the
+   * root on the lowest string; the rest follow going up the neck (one octave's worth). A position
+   * below the root is moved up an octave when the neck is long enough, so the lesson keeps climbing.
+   */
+  function scalePositions(tuning, pcs, frets, rootPc) {
+    const maxStart = Math.max(0, frets - 4);
+    const root = defaultPosition(tuning, rootPc);
+    const set = new Set(pcs.map(pc));
+    const starts = [];
+    for (let f0 = 0; f0 < 12; f0++) {
+      if (!set.has(pc(tuning[0] + f0))) continue;
+      let f = f0;
+      if (f < root && f + 12 <= maxStart) f += 12;
+      if (f <= maxStart) starts.push(f);
+    }
+    const rel = (f) => (f >= root ? f - root : f - root + 100); // below the root (no room to move up) goes last
+    return [...new Set(starts)].sort((a, b) => rel(a) - rel(b));
+  }
+
   /** Every place on the neck where this exact pitch can be played: [{s, f}]. */
   function positionsOf(tuning, frets, midi) {
     return tuning.map((open, s) => ({ s, f: midi - open })).filter((p) => p.f >= 0 && p.f <= frets);
@@ -233,6 +253,6 @@
   return {
     SHARPS, FLATS, INTERVALS, SCALES, CHORDS, TUNINGS,
     pc, noteName, noteNameWithOctave, intervalName, midiToFreq, freqToMidi,
-    scalePcs, chordPcs, fretboard, buildRun, findVoicings, formatVoicing, positionsOf, guessPosition, scaleBox, scaleLesson, defaultPosition,
+    scalePcs, chordPcs, fretboard, buildRun, findVoicings, formatVoicing, positionsOf, guessPosition, scaleBox, scalePositions, scaleLesson, defaultPosition,
   };
 });

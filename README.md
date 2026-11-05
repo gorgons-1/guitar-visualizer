@@ -7,11 +7,10 @@ A desktop app for exploring the guitar fretboard.
 - **Arpeggios**: chord tones shown across the whole neck.
 - **Tunings**: standard, drop D/C, Eb, D standard, DADGAD, open G/D/E, 7-string and 4-string bass, with a left-handed view.
 - **Sound**: click any fret to hear it, or press **Play** (or Space) to hear the scale, arpeggio or chord.
-- **Live input**: choose a microphone or USB guitar interface and the input channel. The notes you play light up on the neck, and a tuner shows whether each note is in key.
+- **Live input**: choose a microphone or USB guitar interface and the input channel. A tuner shows the note you play and whether it is in key.
 - **Chord check**: in Chord mode, tick *Check my chord when I strum* and the app tells you if the chord is right, or what's wrong (missing note, extra note, which string to fix).
-- **Hand position**: lock to a 5-fret area so played notes always show in the right place.
 - **Tab player**: paste a text tab or open a `.txt` tab file. Each step is shown on the neck with the next few numbered, and the tuning is set from the string names. Play it back at any speed, loop it, step with ← →, or tick *Wait for me* so the app listens and moves on when you play each note or chord. **Play along** gives a count-in, then runs the tab at your speed and scores every step as hit or missed, with your best score. Understands 2-digit frets, chords, hammer-ons, pull-offs, slides and bends.
-- **Practice & lessons**: *Find the note* (random targets) or a *Scale lesson* that walks you up and down a scale position note by note, showing the next notes; tracks score, streak and time.
+- **Practice & lessons**: *Find the note* (random targets) or a *Scale lesson* that walks you up and down each scale position note by note, showing only that position's notes and the next notes to play, then moves up the neck to the next position (or pick one position to drill); tracks score, streak and time.
 - **String detection (experimental)**: calibrate once by plucking each open string; the app then measures each note's overtones (string stiffness / inharmonicity) to work out which string you played.
 - **Copy diagnostics**: copies the last 4 seconds of what the app heard, for troubleshooting.
 

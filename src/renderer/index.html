@@ -111,7 +111,7 @@
             <span id="tempo-val"></span> BPM
           </label>
         </div>
-        <p class="hint">Tip: click any fret to hear that note. When listening, clicking where your hand is helps it pick the right fret.</p>
+        <p class="hint">Tip: click any fret to hear that note.</p>
       </div>
 
       <div class="card">
@@ -135,9 +135,6 @@
         <label class="check"><input type="checkbox" id="monitor"> Monitor input through speakers (use headphones)</label>
         <label class="check" title="Ignores voices, talking and background noise. Only notes that are plucked, clean and steady are shown.">
           <input type="checkbox" id="guitar-only"> Guitar only (ignore voices &amp; background noise)</label>
-        <label title="The app hears the note but not which string. Pick where your hand is and it will always show the note there.">Hand position
-          <select id="hand-lock"></select></label>
-        <label class="check"><input type="checkbox" id="show-all-live"> Show every place the played note can be found</label>
         <div class="row">
           <button id="listen" class="primary">&#127908; Start listening</button>
           <div class="meter" title="Input level"><div id="level"></div></div>
@@ -167,7 +164,10 @@
           </label>
           <button id="practice-toggle" class="primary">Start practice</button>
         </div>
-        <p class="hint">Uses the notes of the current scale or chord, inside your Hand position area (whole neck on Auto). The target is circled in green.</p>
+        <div class="row" id="lesson-pos-row">
+          <label>Positions <select id="lesson-pos"></select></label>
+        </div>
+        <p class="hint">Uses the notes of the current scale or chord. The note to play is circled in green.</p>
         <div id="practice-target" class="target-text">–</div>
         <div id="lesson-info" class="muted"></div>
         <div id="practice-feedback"></div>
