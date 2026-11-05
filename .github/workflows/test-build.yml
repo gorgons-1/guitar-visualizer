@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false # one platform failing doesn't cancel the others
       matrix:
         include:
           - os: windows-latest
@@ -29,10 +30,13 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      - name: Install (retries if a download times out)
+        shell: bash
+        run: for i in 1 2 3; do npm ci && break; [ $i = 3 ] && exit 1; echo "retrying in 30s"; sleep 30; done
       - run: npm test
       - name: Build installers (no upload to releases)
-        run: npx electron-builder --publish never
+        shell: bash
+        run: for i in 1 2 3; do npx electron-builder --publish never && break; [ $i = 3 ] && exit 1; echo "retrying in 30s"; sleep 30; done
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
       - uses: actions/upload-artifact@v4

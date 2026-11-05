@@ -32,6 +32,7 @@ jobs:
   build:
     needs: draft
     strategy:
+      fail-fast: false # one platform failing doesn't cancel the others
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
@@ -41,10 +42,13 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      - name: Install (retries if a download times out)
+        shell: bash
+        run: for i in 1 2 3; do npm ci && break; [ $i = 3 ] && exit 1; echo "retrying in 30s"; sleep 30; done
       - run: npm test
       - name: Build and upload to draft release
-        run: npx electron-builder --publish always
+        shell: bash
+        run: for i in 1 2 3; do npx electron-builder --publish always && break; [ $i = 3 ] && exit 1; echo "retrying in 30s"; sleep 30; done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false # no code-signing certificate (yet)
