@@ -85,7 +85,7 @@
     const n = tun.length;
     const N = state.frets;
     const W = 1200, gap = 34, top = 26;
-    const H = top * 2 + gap * (n - 1) + 22;
+    const H = top * 2 + gap * (n - 1) + 26;
     const openX = 26, nutX = 56, endX = W - 14;
     const k = 1 - Math.pow(2, -N / 12);
     const fx = (f) => nutX + ((endX - nutX) * (1 - Math.pow(2, -f / 12))) / k;
@@ -108,10 +108,10 @@
       if (f > N) continue;
       const cx = X(noteX(f));
       if (f % 12 === 0) {
-        el('circle', { cx, cy: midY - gap, r: 6, class: 'inlay' }, svg);
-        el('circle', { cx, cy: midY + gap, r: 6, class: 'inlay' }, svg);
+        el('circle', { cx, cy: midY - gap, r: 7, class: 'inlay' }, svg);
+        el('circle', { cx, cy: midY + gap, r: 7, class: 'inlay' }, svg);
       } else {
-        el('circle', { cx, cy: midY, r: 6, class: 'inlay' }, svg);
+        el('circle', { cx, cy: midY, r: 7, class: 'inlay' }, svg);
       }
     }
 
@@ -127,7 +127,8 @@
 
     // Fret numbers
     for (let f = 0; f <= N; f++) {
-      const t = el('text', { x: X(noteX(f)), y: boardBot + 16, class: 'fretnum' }, svg);
+      const marker = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24].includes(f);
+      const t = el('text', { x: X(noteX(f)), y: boardBot + 19, class: 'fretnum' + (marker ? ' marker' : '') }, svg);
       t.textContent = f;
     }
 

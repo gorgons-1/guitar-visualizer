@@ -101,9 +101,10 @@ footer { display: flex; gap: 12px; align-items: center; padding: 6px 16px; backg
 .fretline { stroke: var(--fret); stroke-width: 2; }
 .nut { stroke: #ece6da; stroke-width: 6; }
 .string { stroke: var(--string); }
-.inlay { fill: var(--wood-2); }
+.inlay { fill: #e8dfcf; opacity: .7; }
 .hand-area { fill: rgba(240, 166, 64, .14); stroke: rgba(240, 166, 64, .55); stroke-width: 1.5; rx: 6; }
-.fretnum { fill: var(--muted); font-size: 11px; text-anchor: middle; }
+.fretnum { fill: #c3c8cf; font-size: 13px; text-anchor: middle; }
+.fretnum.marker { fill: var(--text); font-weight: 700; }
 .hit { fill: transparent; cursor: pointer; }
 .hit:hover { fill: rgba(255, 255, 255, .12); }
 .dot { stroke: rgba(0, 0, 0, .35); stroke-width: 1; pointer-events: none; }
