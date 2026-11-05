@@ -323,6 +323,10 @@
     voicingIndex = idx;
     render();
     playCurrent();
+    if (state.checkChord) {
+      $('chord-feedback').textContent = `Now strum shape: ${T.formatVoicing(v)}…`;
+      $('chord-feedback').className = 'chord-feedback';
+    }
   }
 
   // ---------------- Side panel ----------------
@@ -675,7 +679,8 @@
       const parts = [];
       if (res.missing.length) parts.push('missing ' + res.missing.map((pc) => `${name(pc)} (${ROLE(state.root, pc)})`).join(', '));
       if (res.extra.length) parts.push('extra ' + res.extra.map((pc) => name(pc)).join(', '));
-      const hint = mistakeText(res.mistake, shape || []);
+      let hint = mistakeText(res.mistake, shape || []);
+      if (state.chord === '5' && res.extra.length && !res.missing.length) hint = 'A power chord is just the strings shown - mute the others.';
       box.textContent = `✗ Not quite: ${parts.join('; ')}. ${hint}`.trim();
       box.className = 'chord-feedback no';
     }

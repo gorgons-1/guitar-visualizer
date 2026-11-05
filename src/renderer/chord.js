@@ -82,7 +82,7 @@
    * @param {number[]} chordPcs  pitch classes of the chord, root first (0 = C)
    * @returns {{status:'correct'|'wrong'|'not-a-chord', missing:number[], extra:number[], score:number}}
    */
-  function evaluate(profile, chordPcs, { present = 0.36, extraMax = 0.62, overtoneExtraMax = 0.85 } = {}) {
+  function evaluate(profile, chordPcs, { present = 0.36, extraMax = 0.62, overtoneExtraMax = 0.85, powerExtraMax = 0.38 } = {}) {
     const pcs = chordPcs.map((p) => ((p % 12) + 12) % 12);
     const inChord = new Set(pcs);
     const sounding = profile.filter((v) => v >= 0.45).length;
@@ -96,9 +96,13 @@
     // tone's overtone, so it has to be much stronger before it counts as a wrong note.
     // (Only for the root and 3rd: a note a 5th above the chord's 5th is a 9th, a common mistake.)
     const overtoneOf = new Set(pcs.filter((pc) => pc !== fifth && profile[pc] >= 0.7).map((pc) => (pc + 7) % 12));
+    // Power chords: the 9th overtone of the root and of the 5th (a whole step up) is always there too.
+    if (pcs.length === 2) pcs.forEach((pc) => { if (profile[pc] >= 0.7) overtoneOf.add((pc + 2) % 12); });
+    // Power chords (root + 5th) have nothing to hide a 3rd: any clear extra note means a full chord was played.
+    const extraLimit = pcs.length === 2 ? Math.min(extraMax, powerExtraMax) : extraMax;
     const extra = profile
       .map((v, pc) => ({ pc, v }))
-      .filter((x) => !inChord.has(x.pc) && x.v >= (overtoneOf.has(x.pc) ? overtoneExtraMax : extraMax))
+      .filter((x) => !inChord.has(x.pc) && x.v >= (overtoneOf.has(x.pc) ? overtoneExtraMax : extraLimit))
       .map((x) => x.pc);
     const total = profile.reduce((a, b) => a + b, 0);
     const score = pcs.reduce((a, pc) => a + profile[pc], 0) / total;

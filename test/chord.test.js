@@ -66,3 +66,11 @@ test('a missing 5th or an extra chord tone is still correct', () => {
   assert.equal(judge([X, 3, 2, X, 1, 0], 0, 'maj', [X, 3, 2, 0, 1, 0]).status, 'correct', 'C without the G');
   assert.equal(judge([0, 3, 2, 0, 1, 0], 0, 'maj', [X, 3, 2, 0, 1, 0]).status, 'correct', 'C with low E (a chord tone)');
 });
+
+test('power chords: right shape is correct; a full chord or the wrong root is caught', () => {
+  const P = [3, 5, 5, X, X, X];
+  assert.equal(judge(P, 7, '5', P).status, 'correct', 'G5');
+  assert.equal(judge([X, 3, 5, 5, X, X], 0, '5', [X, 3, 5, 5, X, X]).status, 'correct', 'C5');
+  assert.equal(judge([5, 7, 7, X, X, X], 7, '5', P).status, 'wrong', 'A5 instead of G5');
+  assert.equal(judge([3, 5, 5, 4, 3, 3], 7, '5', P).status, 'wrong', 'full G major instead of G5');
+});

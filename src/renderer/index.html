@@ -63,6 +63,11 @@
           </div>
         </div>
         <p id="shapes-hint" class="hint"></p>
+        <div id="chord-check-row" class="row check-row">
+          <label class="check big"><input type="checkbox" id="check-chord"> &#127908; Check my chord when I strum</label>
+          <span class="muted">Pick a shape, strum it, and the app tells you if it's right.</span>
+        </div>
+        <div id="chord-feedback" class="chord-feedback"></div>
         <div id="shapes" class="shapes"></div>
       </div>
       <div class="card wide" id="tab-card">
@@ -111,10 +116,6 @@
           <span id="voicing-label"></span>
           <button id="next" title="Next voicing">&#9654;</button>
         </div>
-        <div id="chord-check-row" class="row">
-          <label class="check"><input type="checkbox" id="check-chord"> &#127928; Check my chord when I strum</label>
-        </div>
-        <div id="chord-feedback" class="chord-feedback"></div>
         <div class="row">
           <button id="play" class="primary">&#9654; Play</button>
           <label class="inline">Tempo
