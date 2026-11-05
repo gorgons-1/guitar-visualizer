@@ -10,7 +10,7 @@
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, tempo: 120,
     device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
-    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, lessonPos: 'all', countIn: true, alongSound: false,
+    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, showAllShapes: false, lessonPos: 'all', countIn: true, alongSound: false,
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -50,7 +50,11 @@
   function voicings() {
     const key = [state.tuning, state.root, state.chord, state.frets].join('|');
     if (voicingCache.key !== key) {
-      voicingCache = { key, list: T.findVoicings(tuning(), state.root, state.chord, { maxFret: state.frets }) };
+      // the main shapes first (as in the diagrams), then every other way to play it
+      const main = shapes().map((sh) => sh.v);
+      const rest = T.findVoicings(tuning(), state.root, state.chord, { maxFret: state.frets })
+        .filter((v) => !main.some((m) => sameShape(m, v)));
+      voicingCache = { key, list: main.concat(rest) };
       voicingIndex = 0;
     }
     return voicingCache.list;
@@ -84,7 +88,7 @@
     const tun = tuning();
     const n = tun.length;
     const N = state.frets;
-    const W = 1200, gap = 34, top = 26;
+    const W = 1200, gap = 34, top = 34; // room above the neck for shape numbers
     const H = top * 2 + gap * (n - 1) + 26;
     const openX = 26, nutX = 56, endX = W - 14;
     const k = 1 - Math.pow(2, -N / 12);
@@ -142,8 +146,21 @@
     // Notes
     const pcs = activePcs();
     const pcSet = new Set(pcs);
-    const voicing = state.mode === 'chord' ? currentVoicing() : null;
+    const allShapes = state.mode === 'chord' && state.showAllShapes && !tabView() ? shapes() : null;
+    const voicing = state.mode === 'chord' && !allShapes ? currentVoicing() : null;
     const practiceOnly = practiceArea();
+    const inShape = allShapes ? new Set(allShapes.flatMap((sh) => sh.v.map((f, s) => (f === null ? null : s + ':' + f)).filter(Boolean))) : null;
+    if (allShapes) {
+      // each shape's area of the neck, numbered like the diagrams
+      allShapes.forEach((sh, i) => {
+        const fr = sh.v.filter((f) => f !== null);
+        const lo = Math.min(...fr), hi = Math.max(...fr);
+        const x1 = lo === 0 ? openX - 16 : fx(lo - 1) + 3, x2 = hi === 0 ? openX + 16 : fx(hi) - 3;
+        rect(x1, x2, boardTop - 4 + (i % 2) * 3, boardBot - boardTop + 8 - (i % 2) * 6, 'shape-area' + (i % 2 ? ' alt' : ''));
+        const t = el('text', { x: X((x1 + x2) / 2), y: boardTop - 8, class: 'shape-num' }, svg);
+        t.textContent = i + 1;
+      });
+    }
 
     for (let s = 0; s < n; s++) {
       if (voicing && voicing[s] === null && !tabView()) {
@@ -160,10 +177,11 @@
         el('title', {}, hit).textContent = T.noteNameWithOctave(midi, state.flats);
 
         if (tabView() || !pcSet.has(p)) continue;
+        if (inShape && !inShape.has(s + ':' + f)) continue;
         if (practiceOnly && !practiceOnly.has(s + ':' + f)) continue; // practising: only this area's notes
         if (voicing && voicing[s] === null && f === 0) continue; // keep the × readable
         let ghost = false;
-        if (state.mode === 'chord') {
+        if (state.mode === 'chord' && !allShapes) {
           if (!voicing) ghost = true;
           else if (voicing[s] !== f) ghost = true;
         }
@@ -211,6 +229,95 @@
   const handLock = () => null; // the neck no longer shows where a played note is, so there's no hand position to lock
   const bestPosition = (midi, hand) => T.guessPosition(tuning(), state.frets, midi, hand, handLock());
 
+
+  // ---------------- Chord shapes (diagrams) ----------------
+  let shapeCache = { key: '', list: [] };
+  function shapes() {
+    const key = [state.tuning, state.root, state.chord, state.frets].join('|');
+    if (shapeCache.key !== key) shapeCache = { key, list: T.chordShapes(tuning(), state.root, state.chord, state.frets) };
+    return shapeCache.list;
+  }
+  const sameShape = (a, b) => !!a && !!b && a.length === b.length && a.every((f, i) => f === b[i]);
+
+  /** Small chord box diagram (strings up and down, low string on the left). */
+  function chordDiagram(v) {
+    const tun = tuning(), n = tun.length;
+    const fr = v.filter((f) => f !== null && f > 0);
+    const hi = fr.length ? Math.max(...fr) : 0, lo = fr.length ? Math.min(...fr) : 0;
+    const base = hi <= 4 ? 1 : lo; // show the nut when the shape fits in the first frets
+    const rows = Math.max(4, hi - base + 1);
+    const gx = 13, gy = 17, left = 22, top = 22;
+    const W = left + gx * (n - 1) + 12, H = top + gy * rows + 6;
+    const svgEl = document.createElementNS(SVGNS, 'svg');
+    svgEl.setAttribute('width', W);
+    svgEl.setAttribute('height', H);
+    svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const sx = (s) => left + gx * (state.lefty ? n - 1 - s : s);
+    for (let r = 0; r <= rows; r++) {
+      el('line', { x1: sx(0), x2: sx(n - 1), y1: top + r * gy, y2: top + r * gy, class: r === 0 && base === 1 ? 'cd-nut' : 'cd-fret' }, svgEl);
+    }
+    for (let s = 0; s < n; s++) el('line', { x1: sx(s), x2: sx(s), y1: top, y2: top + rows * gy, class: 'cd-string' }, svgEl);
+    if (base > 1) {
+      const t = el('text', { x: Math.min(sx(0), sx(n - 1)) - 6, y: top + gy / 2, class: 'cd-base' }, svgEl);
+      t.textContent = base + 'fr';
+    }
+    v.forEach((f, s) => {
+      if (f === null || f === 0) {
+        const t = el('text', { x: sx(s), y: top - 9, class: 'cd-mark' }, svgEl);
+        t.textContent = f === null ? '×' : '○';
+        return;
+      }
+      const semis = T.pc(tun[s] + f - state.root);
+      el('circle', { cx: sx(s), cy: top + (f - base + 0.5) * gy, r: 5.5, class: 'cd-dot', fill: colorFor(semis) }, svgEl);
+    });
+    return svgEl;
+  }
+
+  function renderShapes() {
+    const card = $('shapes-card');
+    card.classList.toggle('hidden', state.mode !== 'chord');
+    if (state.mode !== 'chord') return;
+    const power = state.chord === '5';
+    const c = T.CHORDS[state.chord];
+    $('shapes-title').textContent = `${name(state.root)}${c.symbol} shapes up the neck`;
+    $('power-btn').classList.toggle('on', power);
+    $('power-btn').textContent = power ? '⚡ Power chords (on)' : '⚡ Power chords';
+    $('show-all-shapes').checked = state.showAllShapes;
+    $('shapes-hint').textContent = power
+      ? 'Power chords are just the root, the 5th and the octave, so they work with any key or style - the sound of rock and metal. Same shape anywhere on the neck: move it to change the chord. Mute the strings you don\'t play.'
+      : 'The main ways to play this chord, from the nut up the neck. Click one to see it on the neck and hear it.';
+    const box = $('shapes');
+    box.innerHTML = '';
+    const list = shapes();
+    if (!list.length) { box.textContent = 'No shapes found for this chord in this tuning.'; return; }
+    const cur = currentVoicing();
+    list.forEach((sh, i) => {
+      const b = document.createElement('div');
+      b.className = 'shape' + (sameShape(sh.v, cur) ? ' sel' : '');
+      b.title = T.formatVoicing(sh.v) + ' (low → high string)';
+      const head = document.createElement('b');
+      head.textContent = `${i + 1}. ${sh.label}`;
+      b.appendChild(head);
+      b.appendChild(chordDiagram(sh.v));
+      const sub = document.createElement('span');
+      sub.textContent = T.formatVoicing(sh.v);
+      b.appendChild(sub);
+      b.onclick = () => selectShape(sh.v);
+      box.appendChild(b);
+    });
+  }
+
+  /** Put a shape on the neck (as the current voicing) and strum it. */
+  function selectShape(v) {
+    const list = voicings();
+    let idx = list.findIndex((x) => sameShape(x, v));
+    if (idx < 0) { list.push(v); idx = list.length - 1; }
+    voicingIndex = idx;
+    if (state.showAllShapes) state.showAllShapes = false; // focus on the one picked
+    render();
+    playCurrent();
+  }
+
   // ---------------- Side panel ----------------
   function renderInfo() {
     const isScale = state.mode === 'scale';
@@ -238,6 +345,7 @@
       list.appendChild(chip);
     }
 
+    renderShapes();
     if (state.mode === 'chord') {
       const all = voicings();
       const v = currentVoicing();
@@ -1320,6 +1428,14 @@ E|---------3-------3-------0-------|
     bind('flats', 'flats', Boolean, fillRootSelect);
     bind('lefty', 'lefty', Boolean);
 
+    $('power-btn').onclick = () => {
+      state.mode = 'chord';
+      state.chord = state.chord === '5' ? 'maj' : '5';
+      $('mode').value = 'chord';
+      $('chord').value = state.chord;
+      render();
+    };
+    $('show-all-shapes').onchange = (e) => { state.showAllShapes = e.target.checked; render(); };
     $('prev').onclick = () => { const n = voicings().length; voicingIndex = (voicingIndex - 1 + n) % n; render(); };
     $('next').onclick = () => { voicingIndex = (voicingIndex + 1) % voicings().length; render(); };
     $('play').onclick = playCurrent;

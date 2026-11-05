@@ -54,6 +54,17 @@
     </section>
 
     <section class="panels">
+      <div class="card wide" id="shapes-card">
+        <div class="row spread">
+          <h2 id="shapes-title">Chord shapes</h2>
+          <div class="row">
+            <button id="power-btn" title="Power chords: root, 5th and octave - the rock and metal chord">&#9889; Power chords</button>
+            <label class="check"><input type="checkbox" id="show-all-shapes"> Show all on the neck</label>
+          </div>
+        </div>
+        <p id="shapes-hint" class="hint"></p>
+        <div id="shapes" class="shapes"></div>
+      </div>
       <div class="card wide" id="tab-card">
         <h2>Tab player</h2>
         <p class="hint">Paste a guitar tab (the text kind, with a line per string like <code>e|---0---3---|</code>) or open a .txt tab file. Each step is shown on the neck, with the next few numbered.</p>

@@ -162,6 +162,68 @@
       .slice(0, limit);
   }
 
+  /**
+   * Power chord shapes (root, 5th, octave on three neighbouring strings), with the root on each of
+   * the three lowest strings, plus the same shapes an octave up where they fit.
+   * @returns {{v:(number|null)[], label:string}[]}
+   */
+  function powerShapes(tuning, rootPc, frets) {
+    const n = tuning.length;
+    const out = [];
+    for (let s = 0; s < Math.min(3, n - 2); s++) {
+      let r = pc(rootPc - tuning[s]);
+      const d5 = tuning[s] + 7 - tuning[s + 1], d8 = tuning[s] + 12 - tuning[s + 2];
+      while (r + Math.min(d5, d8) < 0) r += 12;
+      for (const base of [r, r + 12]) {
+        const v = new Array(n).fill(null);
+        v[s] = base; v[s + 1] = base + d5; v[s + 2] = base + d8;
+        if (Math.max(v[s], v[s + 1], v[s + 2]) > frets) continue;
+        out.push({ v, label: `Root on string ${n - s}` });
+      }
+    }
+    return out.sort((a, b) => Math.min(...a.v.filter((f) => f !== null)) - Math.min(...b.v.filter((f) => f !== null)));
+  }
+
+  /**
+   * The main shapes of a chord up the neck (for a major chord in standard tuning these are the
+   * five "CAGED" shapes). Picks the fullest, easiest voicing in each area of the neck.
+   * @returns {{v:(number|null)[], label:string}[]}  lowest on the neck first
+   */
+  function chordShapes(tuning, rootPc, chordId, frets, count = 5) {
+    if (chordId === '5') return powerShapes(tuning, rootPc, frets);
+    const all = findVoicings(tuning, rootPc, chordId, { maxFret: Math.min(frets, 17), limit: 5000 });
+    const tones = chordPcs(rootPc, chordId).length;
+    const info = (v) => {
+      const fr = v.filter((f) => f !== null && f > 0);
+      const opens = v.filter((f) => f === 0).length;
+      const lo = fr.length ? Math.min(...fr) : 0, hi = fr.length ? Math.max(...fr) : 0;
+      return { lo, hi, opens, strings: v.filter((f) => f !== null).length, pos: opens && hi <= 4 ? 0 : lo };
+    };
+    const score = (v, i) => {
+      let sc = i.strings * 3 - (i.hi - i.lo) * 1.2;
+      if (v.findIndex((f) => f !== null) <= 1) sc += 2; // bass note on one of the two lowest strings
+      if (v[v.length - 1] !== null) sc += 1.5; // top string ringing: fuller sound
+      if (i.pos > 0 && v.filter((f) => f === i.lo).length >= 2) sc += 1; // a barre is a normal shape
+      if (i.strings < Math.min(tuning.length, Math.max(4, tones + 1))) sc -= 3;
+      return sc;
+    };
+    const ranked = all
+      .map((v) => ({ v, i: info(v) }))
+      .filter((x) => x.i.pos <= 12 && !(x.i.opens && x.i.hi > 4)) // no open strings far from the hand
+      .map((x) => ({ ...x, s: score(x.v, x.i) }))
+      .sort((a, b) => b.s - a.s);
+    const picked = [];
+    for (const c of ranked) {
+      if (picked.length >= count) break;
+      // one shape per area of the neck (and not the same shape again an octave up)
+      if (picked.some((p) => Math.abs(p.i.pos - c.i.pos) < 2 || Math.abs(Math.abs(p.i.pos - c.i.pos) - 12) < 2)) continue;
+      picked.push(c);
+    }
+    return picked
+      .sort((a, b) => a.i.pos - b.i.pos)
+      .map((p) => ({ v: p.v, label: p.i.pos === 0 ? 'Open' : `Fret ${p.i.pos}` }));
+  }
+
   const formatVoicing = (v) => v.map((f) => (f === null ? 'x' : f)).join(' ');
 
   /**
@@ -253,6 +315,6 @@
   return {
     SHARPS, FLATS, INTERVALS, SCALES, CHORDS, TUNINGS,
     pc, noteName, noteNameWithOctave, intervalName, midiToFreq, freqToMidi,
-    scalePcs, chordPcs, fretboard, buildRun, findVoicings, formatVoicing, positionsOf, guessPosition, scaleBox, scalePositions, scaleLesson, defaultPosition,
+    scalePcs, chordPcs, fretboard, buildRun, findVoicings, chordShapes, powerShapes, formatVoicing, positionsOf, guessPosition, scaleBox, scalePositions, scaleLesson, defaultPosition,
   };
 });

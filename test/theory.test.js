@@ -128,3 +128,22 @@ test('scale positions climb the neck from the root', () => {
   assert.equal(T.scalePositions(std, T.scalePcs(7, 'major'), 22, 7).length, 7, 'a 7-note scale has 7 positions');
   assert.equal(T.scalePositions(std, T.scalePcs(7, 'major'), 22, 7)[0], 3);
 });
+
+test('main chord shapes: the five CAGED shapes up the neck', () => {
+  const std = T.TUNINGS.standard.notes;
+  const fmt = (r, id) => T.chordShapes(std, r, id, 22).map((x) => T.formatVoicing(x.v));
+  assert.deepEqual(fmt(7, 'maj'), ['3 2 0 0 0 3', '3 5 5 4 3 3', 'x x 5 7 8 7', 'x 10 9 7 8 7', 'x 10 12 12 12 10']);
+  assert.deepEqual(fmt(0, 'maj'), ['x 3 2 0 1 0', 'x 3 5 5 5 3', '8 7 5 5 5 8', '8 10 10 9 8 8', 'x x 10 12 13 12']);
+  assert.equal(T.chordShapes(std, 7, 'maj', 22)[0].label, 'Open');
+  assert.equal(fmt(9, 'min')[0], 'x 0 2 2 1 0');
+});
+
+test('power chord shapes: root on the 6th, 5th and 4th strings', () => {
+  const std = T.TUNINGS.standard.notes;
+  const g5 = T.chordShapes(std, 7, '5', 22).map((x) => T.formatVoicing(x.v));
+  assert.ok(g5.includes('3 5 5 x x x'));
+  assert.ok(g5.includes('x 10 12 12 x x'));
+  assert.ok(g5.includes('x x 5 7 8 x'), 'root on D string: octave on the B string is one fret higher');
+  // Drop D: one-finger power chords
+  assert.ok(T.chordShapes(T.TUNINGS.dropD.notes, 7, '5', 22).map((x) => T.formatVoicing(x.v)).includes('5 5 5 x x x'));
+});
