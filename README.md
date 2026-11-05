@@ -10,8 +10,7 @@ A desktop app for exploring the guitar fretboard.
 - **Live input**: choose a microphone or USB guitar interface and the input channel. A tuner shows the note you play and whether it is in key.
 - **Chord check**: in Chord mode, tick *Check my chord when I strum* and the app tells you if the chord is right, or what's wrong (missing note, extra note, which string to fix).
 - **Tab player**: paste a text tab or open a `.txt` tab file. Each step is shown on the neck with the next few numbered, and the tuning is set from the string names. Play it back at any speed, loop it, step with ← →, or tick *Wait for me* so the app listens and moves on when you play each note or chord. **Play along** gives a count-in, then runs the tab at your speed and scores every step as hit or missed, with your best score. Understands 2-digit frets, chords, hammer-ons, pull-offs, slides and bends.
-- **Practice & lessons**: *Find the note* (random targets) or a *Scale lesson* that walks you up and down each scale position note by note, showing only that position's notes and the next notes to play, then moves up the neck to the next position (or pick one position to drill); tracks score, streak and time.
-- **String detection (experimental)**: calibrate once by plucking each open string; the app then measures each note's overtones (string stiffness / inharmonicity) to work out which string you played.
+- **Practice & lessons**: *Find the note* (random targets) or a *Scale lesson* that walks you up and down each scale position note by note, showing only that position's notes and the next notes to play, then moves up the neck to the next position automatically (or pick one position to drill); tracks score, streak and time.
 - **Copy diagnostics**: copies the last 4 seconds of what the app heard, for troubleshooting.
 
 ## Development

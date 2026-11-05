@@ -10,7 +10,7 @@
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, tempo: 120,
     device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
-    practiceType: 'find', useStrings: false, calib: {}, checkChord: false, tabSpeed: 100, tabLoop: false, lessonPos: 'all', countIn: true, alongSound: false,
+    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, lessonPos: 'all', countIn: true, alongSound: false,
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -187,7 +187,7 @@
     playingMarks.forEach((p) => mark(p, 'playing'));
     const showTab = tabView();
     if (showTab) drawTabOverlay(mark);
-    const target = cal.active ? { s: cal.s, f: 0 } : practice.on && !showTab ? practice.target : null;
+    const target = practice.on && !showTab ? practice.target : null;
     if (practice.on && !showTab && state.practiceType === 'lesson') {
       // the next few notes of the lesson, numbered
       practice.order.slice(practice.idx + 1, practice.idx + 4).forEach((p, i) => {
@@ -258,7 +258,6 @@
     renderInfo();
     drawBoard();
     save();
-    if (typeof updateStringsUi === 'function') updateStringsUi();
     fillLessonPos();
     // Scale, chord or tuning changed: keep practice targets inside the new notes/area.
     if (practice.on && state.practiceType === 'lesson') {
@@ -331,114 +330,9 @@
     }, seq.length * step * 1000 + 300));
   }
 
-  // ---------------- String detection (experimental) ----------------
   const stringLabel = (s) => `${T.noteName(tuning()[s], state.flats)} string (${tuning().length - s})`;
-  const calibration = () => (state.calib && state.calib[state.tuning]) || null;
-  const cal = { active: false, s: 0, samples: [], result: [], lastMeasure: 0, since: 0 };
   let noteOnAt = 0; // when the current note started (new pitch or re-pluck)
   let lastOnset = -Infinity;
-  let measuredFor = -1;
-  const timbreLog = [];
-
-  function updateStringsUi() {
-    const c = calibration();
-    $('use-strings').disabled = !c;
-    $('use-strings').checked = !!(c && state.useStrings);
-    $('calibrate').textContent = cal.active ? 'Cancel' : c ? 'Re-calibrate' : 'Calibrate';
-    if (!cal.active) {
-      $('calib-status').textContent = c
-        ? `Calibrated for ${T.TUNINGS[state.tuning].name}.`
-        : `Not calibrated for ${T.TUNINGS[state.tuning].name} yet.`;
-    }
-  }
-
-  async function toggleCalibration() {
-    if (cal.active) {
-      cal.active = false;
-      updateStringsUi();
-      drawOverlay();
-      return;
-    }
-    if (!input.active) await startListening();
-    if (!input.active) return;
-    Object.assign(cal, { active: true, s: 0, samples: [], result: [], lastMeasure: 0, since: performance.now() });
-    calPrompt();
-    updateStringsUi();
-    drawOverlay();
-  }
-
-  function calPrompt(extra = '') {
-    $('calib-status').textContent =
-      `${extra}Pluck the open ${stringLabel(cal.s)} and let it ring (${cal.s + 1} of ${tuning().length}).`;
-  }
-
-  function calibrationStep(frame, note, now) {
-    const want = tuning()[cal.s];
-    if (!note) return;
-    if (note.midi !== want) {
-      // Only complain about a newly plucked wrong note (the last string may still be ringing).
-      if (noteOnAt > cal.since && now - noteOnAt > 150) calPrompt(`Heard ${T.noteNameWithOctave(note.midi, state.flats)}. `);
-      return;
-    }
-    const age = now - noteOnAt;
-    if (age < 120 || age > 1500 || now - cal.lastMeasure < 110) return;
-    cal.lastMeasure = now;
-    const r = window.Timbre.measure(frame.long.slice(), frame.sampleRate, note.freq);
-    if (r) cal.samples.push(r.B);
-    else if (age > 1200 && cal.samples.length === 0) {
-      calPrompt("Couldn't read that one clearly - pluck a bit harder. ");
-      return;
-    }
-    if (cal.samples.length < 3) return;
-    const sorted = [...cal.samples].sort((a, b) => a - b);
-    cal.result[cal.s] = sorted[1];
-    cal.samples = [];
-    cal.s++;
-    cal.since = now;
-    if (cal.s >= tuning().length) {
-      state.calib = { ...(state.calib || {}), [state.tuning]: cal.result.slice() };
-      state.useStrings = true;
-      cal.active = false;
-      save();
-      updateStringsUi();
-      $('calib-status').textContent = 'Calibration done! String detection is on.';
-    } else {
-      calPrompt('Got it. ');
-    }
-    drawOverlay();
-  }
-
-  /** After a note has rung ~120 ms, measure its timbre and pick the string. */
-  function detectString(frame, note, now) {
-    const c = calibration();
-    if (!state.useStrings || !c || cal.active || measuredFor === noteOnAt) return;
-    const age = now - noteOnAt;
-    if (age < 120 || age > 800) return;
-    measuredFor = noteOnAt;
-    const cands = positionsOf(note.midi);
-    if (cands.length < 2) { $('string-guess').textContent = ''; return; }
-    if (practice.on && practice.target && note.midi === practice.target.midi) return; // target position is known
-    const r = window.Timbre.measure(frame.long.slice(), frame.sampleRate, note.freq);
-    if (!r) { $('string-guess').textContent = 'String: couldn\'t measure this note'; return; }
-    const lock = handLock();
-    const prior = (p) => {
-      if (lock === null) return 0;
-      const outside = p.f < lock ? lock - p.f : p.f > lock + 4 ? p.f - lock - 4 : 0;
-      return outside * 1.5;
-    };
-    const res = window.Timbre.classify(cands, r.B, c, prior);
-    const pct = Math.round(res.confidence * 100);
-    timbreLog.push({ t: Math.round(now), midi: note.midi, B: r.B, partials: r.partials, best: res.best, pct });
-    if (timbreLog.length > 12) timbreLog.shift();
-    if (res.confidence >= 0.6) {
-      livePos = res.best;
-      if (livePos.f > 0) handPos = livePos;
-      $('string-guess').textContent = `String: ${stringLabel(res.best.s)}, fret ${res.best.f} (${pct}% sure)`;
-      drawOverlay();
-    } else {
-      $('string-guess').textContent = `String: not sure (best guess ${stringLabel(res.best.s)}, ${pct}%)`;
-    }
-  }
 
   // ---------------- Practice mode & lessons ----------------
   const practice = {
@@ -470,8 +364,8 @@
 
   function fillLessonPos() {
     const list = lessonPositions();
-    const entries = [['all', 'Move up through all positions']].concat(
-      list.map((f, i) => [String(i), `Position ${i + 1} only (frets ${f}–${f + 4})`]),
+    const entries = [['all', 'Automatic (moves up through every position)']].concat(
+      list.map((f, i) => [String(i), `Position ${i + 1}`]),
     );
     if (state.lessonPos !== 'all' && Number(state.lessonPos) >= list.length) state.lessonPos = 'all';
     fillSelect($('lesson-pos'), entries, state.lessonPos);
@@ -527,7 +421,7 @@
     }
     $('practice-target').textContent = head;
     $('lesson-info').textContent = isLesson()
-      ? `${$('title').textContent.split(' — ')[0]}, position ${practice.posIdx + 1}${lessonSingle() ? '' : ` of ${lessonPositions().length}`} (frets ${practice.lessonStart}–${practice.lessonStart + 4}). Play each note in turn — the green circle is next, then 2, 3, 4.`
+      ? `${$('title').textContent.split(' — ')[0]}, position ${practice.posIdx + 1}${lessonSingle() ? '' : ` of ${lessonPositions().length}`}. Play each note in turn — the green circle is next, then 2, 3, 4.`
       : '';
     if (feedback !== undefined) {
       $('practice-feedback').textContent = feedback;
@@ -569,7 +463,7 @@
       startLesson();
       nextTarget();
       render();
-      renderPractice(`✓ Position ${practice.posIdx} done (${secs} s, ${wrongHere} mistake${wrongHere === 1 ? '' : 's'}). Now position ${practice.posIdx + 1}: frets ${practice.lessonStart}–${practice.lessonStart + 4}.`, 'yes');
+      renderPractice(`✓ Position ${practice.posIdx} done (${secs} s, ${wrongHere} mistake${wrongHere === 1 ? '' : 's'}). Now position ${practice.posIdx + 1}.`, 'yes');
       return;
     }
     if (lessonSingle()) {
@@ -675,8 +569,8 @@
   const tab = { song: null, text: '', idx: 0, playing: false, timer: null, follow: false, lastWrongAt: 0, chordOnset: -Infinity, mistakes: 0,
     along: false, counting: false, results: [], best: 0, pass: 0 };
   const tabShown = () => !!(tab.song && tab.song.events.length);
-  /** The neck shows the tab (not the scale) unless practice or calibration is running. */
-  const tabView = () => tabShown() && !practice.on && !cal.active;
+  /** The neck shows the tab (not the scale) unless practice is running. */
+  const tabView = () => tabShown() && !practice.on;
   const tabEvent = (i = tab.idx) => (tab.song && tab.song.events[i]) || null;
   const tabMidis = (ev) => ev.notes.map((n) => tuning()[n.s] + n.pitch);
   const TECH_SHORT = { 'hammer-on': 'h', 'pull-off': 'p', 'slide up': '/', 'slide down': '\\', slide: 's', bend: 'b', release: 'r', tap: 't' };
@@ -1199,9 +1093,7 @@ E|---------3-------3-------0-------|
       `Guitar Visualizer diagnostics  v${$('version').textContent.replace('v', '') || '?'}`,
       `device="${deviceLabel}" channel=${state.channel} guitarOnly=${state.guitarOnly} sensitivity=${state.sensitivity} gate=${n(gate.threshold, 4)}`,
       `tuning=${state.tuning} sampleRate=${diagInfo.sampleRate} window=${diagInfo.fftSize}`,
-      `calibration=${JSON.stringify((calibration() || []).map((b) => +b.toExponential(2)))} useStrings=${state.useStrings}`,
       ...chordLog.map((c) => `chord t=${c.t - t0} ${c.status} missing=${c.missing.map((p) => T.SHARPS[p]).join(',')} extra=${c.extra.map((p) => T.SHARPS[p]).join(',')} hint=${c.mistake ? c.mistake.kind + ':' + c.mistake.s + (c.mistake.fret !== undefined ? ':' + c.mistake.fret : '') : '-'} profile=${c.profile.map((v) => v.toFixed(2)).join(' ')}`),
-      ...timbreLog.map((m) => `timbre t=${m.t - t0} note=${T.noteNameWithOctave(m.midi)} B=${m.B.toExponential(2)} partials=${m.partials} -> ${stringLabel(m.best.s)} fret ${m.best.f} (${m.pct}%)`),
       'ms     level  attack  freq     note  clarity onset decision        shown',
       ...diag.map((d) => [
         String(d.t - t0).padStart(5), n(d.lv, 4).padStart(6), n(d.al, 4).padStart(7),
@@ -1283,14 +1175,11 @@ E|---------3-------3-------0-------|
       const hand = now - handTime < 2000 ? handPos : null; // forget the hand after a 2 s pause
       livePos = (tab.follow && tabPosition(liveMidi)) || lessonPosition(liveMidi) || bestPosition(liveMidi, hand);
       if (livePos && livePos.f > 0) handPos = livePos; // open strings don't move the hand
-      if (state.useStrings && calibration()) $('string-guess').textContent = '';
       practiceNoteOn(liveMidi, now);
       tabNoteOn(liveMidi, now);
       drawOverlay();
     }
     handTime = now;
-    if (cal.active) calibrationStep(frame, note, now);
-    else detectString(frame, note, now);
     const f = note.freq;
     const cents = note.cents;
     if (liveMidi === null) return;
@@ -1445,7 +1334,6 @@ E|---------3-------3-------0-------|
     };
     $('refresh-devices').onclick = refreshDevices;
     $('copy-diag').onclick = copyDiagnostics;
-    $('calibrate').onclick = toggleCalibration;
     $('check-chord').checked = state.checkChord;
     $('check-chord').onchange = async (e) => {
       state.checkChord = e.target.checked;
@@ -1454,7 +1342,6 @@ E|---------3-------3-------0-------|
       $('chord-feedback').textContent = state.checkChord ? 'Strum the chord shown on the neck…' : '';
       $('chord-feedback').className = 'chord-feedback';
     };
-    $('use-strings').onchange = (e) => { state.useStrings = e.target.checked; save(); };
     $('practice-toggle').onclick = togglePractice;
     $('lesson-pos').onchange = (e) => {
       state.lessonPos = e.target.value;
@@ -1476,7 +1363,6 @@ E|---------3-------3-------0-------|
       render();
       renderPractice();
     };
-    updateStringsUi();
     renderPractice();
     $('listen').onclick = () => (input.active ? stopListening() : startListening());
     navigator.mediaDevices.addEventListener('devicechange', refreshDevices);

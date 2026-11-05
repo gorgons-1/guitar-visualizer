@@ -117,7 +117,7 @@
       this.source = ctx.createMediaStreamSource(this.stream);
       this.analyser = ctx.createAnalyser();
       // Keep ~170 ms of audio: the newest 2048 samples (4096 for bass tunings) are used for fast
-      // pitch detection; the whole buffer is used to measure string timbre (string detection).
+      // pitch detection; the whole buffer is used for chord checking.
       this.analyser.fftSize = 8192;
       const pitchSize = minFreq < 60 ? 4096 : 2048;
       this.monitorGain = ctx.createGain();
