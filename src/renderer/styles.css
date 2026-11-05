@@ -160,6 +160,28 @@ footer { display: flex; gap: 12px; align-items: center; padding: 6px 16px; backg
 .cd-base { fill: var(--muted); font-size: 10px; text-anchor: end; dominant-baseline: central; }
 #power-btn.on { background: var(--accent); color: #1a1205; border-color: var(--accent); font-weight: 600; }
 
+/* Circle of fifths */
+.circle-wrap { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+#circle { width: 360px; max-width: 100%; height: auto; flex: none; user-select: none; }
+.circle-info { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 8px; }
+.circle-info h3 { margin: 6px 0 0; font-size: 14px; color: var(--muted); font-weight: 600; }
+.cof-cell { fill: var(--panel-2); stroke: var(--bg); stroke-width: 2; cursor: pointer; }
+.cof-cell:hover { fill: #343a45; }
+.cof-cell.inkey { fill: rgba(240, 166, 64, .28); }
+.cof-cell.rel { fill: rgba(95, 211, 141, .45); }
+.cof-cell.sel { fill: var(--accent); }
+.cof-major { fill: var(--text); font-size: 17px; font-weight: 700; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.cof-minor { fill: var(--text); font-size: 13px; font-weight: 600; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.cof-sig { fill: var(--muted); font-size: 10px; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.cof-sel-text { fill: #1a1205 !important; }
+.cof-center { fill: var(--panel); stroke: #3a3f49; }
+.cof-center-text { fill: var(--text); font-size: 18px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+.cof-center-sub { fill: var(--muted); font-size: 12px; text-anchor: middle; dominant-baseline: central; }
+.key-chords { display: flex; gap: 6px; flex-wrap: wrap; }
+.key-chord { display: flex; flex-direction: column; align-items: center; min-width: 54px; padding: 4px 8px; }
+.key-chord small { color: var(--muted); font-size: 11px; }
+.key-chord.on { border-color: var(--good); box-shadow: 0 0 0 1px var(--good); }
+
 /* Tab player */
 .card.wide { grid-column: 1 / -1; }
 code { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--panel-2); padding: 0 4px; border-radius: 4px; }

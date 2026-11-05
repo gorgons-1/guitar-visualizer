@@ -164,3 +164,16 @@ test('finger numbers for common chord shapes', () => {
   assert.equal(fin([3, 5, 5, X, X, X]), '134---', 'power chord');
   assert.equal(T.fingering([3, 5, 5, X, X, X]).barre, null);
 });
+
+test('circle of fifths: key signatures, relative minors and chords in a key', () => {
+  assert.equal(T.CIRCLE.length, 12);
+  T.CIRCLE.forEach((k, i) => assert.equal(T.pc(T.CIRCLE[(i + 1) % 12].pc - k.pc), 7, 'each key is a 5th above the last'));
+  assert.deepEqual(T.keySignature(7, false), { count: 1, notes: ['F#'] }); // G major
+  assert.deepEqual(T.keySignature(2, true), { count: -1, notes: ['Bb'] }); // D minor
+  assert.equal(T.circleIndex(4, true), T.circleIndex(7, false), 'E minor sits with G major');
+  assert.equal(T.keyUsesFlats(5, false), true);
+  const g = T.diatonicChords(7, false).map((c) => T.SHARPS[c.rootPc] + T.CHORDS[c.chord].symbol);
+  assert.deepEqual(g, ['G', 'Am', 'Bm', 'C', 'D', 'Em', 'F#dim']);
+  const am = T.diatonicChords(9, true).map((c) => c.roman + ':' + T.SHARPS[c.rootPc] + T.CHORDS[c.chord].symbol);
+  assert.deepEqual(am, ['i:Am', 'ii°:Bdim', 'III:C', 'iv:Dm', 'v:Em', 'VI:F', 'VII:G']);
+});

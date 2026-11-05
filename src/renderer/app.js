@@ -10,7 +10,7 @@
     mode: 'scale', root: 9, scale: 'minorPentatonic', chord: 'maj', tuning: 'standard',
     frets: 15, labels: 'notes', flats: false, lefty: false, flip: false, tempo: 120,
     device: '', channel: 'mix', monitor: false, sensitivity: 60, showAllLive: false, guitarOnly: true, handLock: '',
-    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, lessonPos: 'all', countIn: true, alongSound: false,
+    practiceType: 'find', checkChord: false, tabSpeed: 100, tabLoop: false, cofKey: null, lessonPos: 'all', countIn: true, alongSound: false,
   };
   const state = (() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gv-state') || '{}') }; } catch { return { ...DEFAULTS }; }
@@ -329,6 +329,126 @@
     }
   }
 
+
+  // ---------------- Circle of fifths ----------------
+  /** The key the circle shows: the scale on the neck if it's major/minor, else the last key picked. */
+  function currentKey() {
+    if (state.mode === 'scale') return { pc: state.root, minor: T.scalePcs(0, state.scale).includes(3) }; // has a minor 3rd: minor key
+    if (state.cofKey) return state.cofKey;
+    return { pc: state.root, minor: state.mode !== 'scale' && T.CHORDS[state.chord].intervals[1] === 3 };
+  }
+  const keyName = (k) => T.noteName(k.pc, T.keyUsesFlats(k.pc, k.minor)) + (k.minor ? ' minor' : ' major');
+
+  function polar(r, deg) {
+    const a = (deg * Math.PI) / 180;
+    return [200 + r * Math.cos(a), 200 + r * Math.sin(a)];
+  }
+  function wedge(r1, r2, a1, a2) {
+    const [x1, y1] = polar(r2, a1), [x2, y2] = polar(r2, a2), [x3, y3] = polar(r1, a2), [x4, y4] = polar(r1, a1);
+    return `M${x1},${y1} A${r2},${r2} 0 0 1 ${x2},${y2} L${x3},${y3} A${r1},${r1} 0 0 0 ${x4},${y4} Z`;
+  }
+
+  function pickKey(pcKey, minor) {
+    state.cofKey = { pc: pcKey, minor };
+    state.mode = 'scale';
+    state.root = pcKey;
+    state.scale = minor ? 'minor' : 'major';
+    state.flats = T.keyUsesFlats(pcKey, minor);
+    $('mode').value = 'scale';
+    $('scale').value = state.scale;
+    $('flats').checked = state.flats;
+    fillRootSelect();
+    render();
+  }
+
+  function pickChord(c) {
+    state.cofKey = currentKey();
+    state.mode = 'chord';
+    state.root = c.rootPc;
+    state.chord = c.chord;
+    $('mode').value = 'chord';
+    $('chord').value = c.chord;
+    fillRootSelect();
+    render();
+    playCurrent();
+  }
+
+  function renderCircle() {
+    const key = currentKey();
+    const idx = T.circleIndex(key.pc, key.minor);
+    const svgC = $('circle');
+    svgC.innerHTML = '';
+    const near = new Set([(idx + 11) % 12, idx, (idx + 1) % 12]);
+    T.CIRCLE.forEach((k, i) => {
+      const mid = i * 30 - 90, a1 = mid - 15, a2 = mid + 15;
+      const minorPc = T.pc(k.pc + 9);
+      // outer ring: major key
+      const majSel = !key.minor && i === idx, minSel = key.minor && i === idx;
+      let cls = 'cof-cell' + (majSel ? ' sel' : key.minor && i === idx ? ' rel' : near.has(i) ? ' inkey' : '');
+      const outer = el('path', { d: wedge(132, 196, a1, a2), class: cls }, svgC);
+      outer.addEventListener('click', () => pickKey(k.pc, false));
+      el('title', {}, outer).textContent = `${k.major} major - ${k.sig === 0 ? 'no sharps or flats' : Math.abs(k.sig) + (k.sig > 0 ? ' sharp' : ' flat') + (Math.abs(k.sig) > 1 ? 's' : '')}`;
+      let [x, y] = polar(168, mid);
+      let t = el('text', { x, y, class: 'cof-major' + (majSel ? ' cof-sel-text' : '') }, svgC);
+      t.textContent = k.major.replace('/', ' ').split(' ')[0];
+      [x, y] = polar(146, mid);
+      t = el('text', { x, y, class: 'cof-sig' + (majSel ? ' cof-sel-text' : '') }, svgC);
+      t.textContent = k.sig === 0 ? '' : Math.abs(k.sig) + (k.sig > 0 ? '♯' : '♭');
+      // inner ring: relative minor
+      cls = 'cof-cell' + (minSel ? ' sel' : !key.minor && i === idx ? ' rel' : near.has(i) ? ' inkey' : '');
+      const inner = el('path', { d: wedge(84, 132, a1, a2), class: cls }, svgC);
+      inner.addEventListener('click', () => pickKey(minorPc, true));
+      el('title', {}, inner).textContent = `${k.minor.split('/')[0]} - relative minor of ${k.major.split('/')[0]}`;
+      [x, y] = polar(108, mid);
+      t = el('text', { x, y, class: 'cof-minor' + (minSel ? ' cof-sel-text' : '') }, svgC);
+      t.textContent = k.minor.split('/')[0];
+    });
+    el('circle', { cx: 200, cy: 200, r: 80, class: 'cof-center' }, svgC);
+    let t = el('text', { x: 200, y: 188, class: 'cof-center-text' }, svgC);
+    t.textContent = keyName(key);
+    const sig = T.keySignature(key.pc, key.minor);
+    t = el('text', { x: 200, y: 214, class: 'cof-center-sub' }, svgC);
+    t.textContent = sig.count === 0 ? 'no ♯ or ♭' : `${Math.abs(sig.count)} ${sig.count > 0 ? 'sharp' : 'flat'}${Math.abs(sig.count) > 1 ? 's' : ''}`;
+
+    // info panel
+    const useFlats = T.keyUsesFlats(key.pc, key.minor);
+    const nm = (p) => T.noteName(p, useFlats);
+    $('key-title').textContent = `Key of ${keyName(key)}`;
+    $('key-sig').textContent = sig.count === 0 ? 'No sharps or flats' : `${Math.abs(sig.count)} ${sig.count > 0 ? 'sharp' : 'flat'}${Math.abs(sig.count) > 1 ? 's' : ''}: ${sig.notes.join(' ')}`;
+    const rel = key.minor ? { pc: T.pc(key.pc + 3), minor: false } : { pc: T.pc(key.pc + 9), minor: true };
+    const iv = T.CIRCLE[(idx + 11) % 12], v = T.CIRCLE[(idx + 1) % 12];
+    const neigh = (k) => (key.minor ? k.minor : k.major).split('/')[0];
+    $('key-rel').textContent = `Relative ${rel.minor ? 'minor' : 'major'}: ${keyName(rel)} · Next door on the circle: ${neigh(iv)} (${key.minor ? 'iv' : 'IV'}) and ${neigh(v)} (${key.minor ? 'v' : 'V'})`;
+    const box = $('key-chords');
+    box.innerHTML = '';
+    T.diatonicChords(key.pc, key.minor).forEach((c) => {
+      const b = document.createElement('button');
+      const on = state.mode === 'chord' && state.root === c.rootPc && state.chord === c.chord;
+      b.className = 'key-chord' + (on ? ' on' : '');
+      b.innerHTML = `<b>${nm(c.rootPc)}${T.CHORDS[c.chord].symbol}</b><small>${c.roman}</small>`;
+      b.title = `${nm(c.rootPc)} ${T.CHORDS[c.chord].name.toLowerCase()} - click to see the shapes`;
+      b.onclick = () => pickChord(c);
+      box.appendChild(b);
+    });
+  }
+
+  /** Strum I - IV - V - I in the current key, using the easiest shape of each chord. */
+  function playProgression() {
+    clearPlayback();
+    const key = currentKey();
+    const ch = T.diatonicChords(key.pc, key.minor);
+    const seq = [ch[0], ch[3], ch[4], ch[0]];
+    const beat = (60 / state.tempo) * 2;
+    seq.forEach((c, i) => {
+      const sh = T.chordShapes(tuning(), c.rootPc, c.chord, state.frets)[0];
+      if (!sh) return;
+      const marks = sh.v.map((f, s) => (f === null ? null : { s, f })).filter(Boolean);
+      marks.forEach((p, k) => synth.play(tuning()[p.s] + p.f, i * beat + k * 0.03, 0.45));
+      playTimers.push(setTimeout(() => { playingMarks = marks; drawOverlay(); }, i * beat * 1000));
+    });
+    playTimers.push(setTimeout(() => { playingMarks = []; drawOverlay(); }, seq.length * beat * 1000));
+  }
+
   // ---------------- Side panel ----------------
   function renderInfo() {
     const isScale = state.mode === 'scale';
@@ -357,6 +477,7 @@
     }
 
     renderShapes();
+    renderCircle();
     if (state.mode === 'chord') {
       const all = voicings();
       const v = currentVoicing();
@@ -1442,6 +1563,7 @@ E|---------3-------3-------0-------|
     bind('lefty', 'lefty', Boolean);
     bind('flip', 'flip', Boolean);
 
+    $('key-play').onclick = playProgression;
     $('power-btn').onclick = () => {
       state.mode = 'chord';
       state.chord = state.chord === '5' ? 'maj' : '5';

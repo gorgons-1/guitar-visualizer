@@ -324,6 +324,42 @@
     return [...new Set(starts)].sort((a, b) => rel(a) - rel(b));
   }
 
+  // ---------------- Circle of fifths ----------------
+  /** The 12 keys clockwise from C, each a 5th above the last, with their relative minors. */
+  const CIRCLE = [
+    { major: 'C', minor: 'Am', pc: 0, sig: 0 }, { major: 'G', minor: 'Em', pc: 7, sig: 1 },
+    { major: 'D', minor: 'Bm', pc: 2, sig: 2 }, { major: 'A', minor: 'F#m', pc: 9, sig: 3 },
+    { major: 'E', minor: 'C#m', pc: 4, sig: 4 }, { major: 'B', minor: 'G#m', pc: 11, sig: 5 },
+    { major: 'F#/Gb', minor: 'D#m/Ebm', pc: 6, sig: 6 }, { major: 'Db', minor: 'Bbm', pc: 1, sig: -5 },
+    { major: 'Ab', minor: 'Fm', pc: 8, sig: -4 }, { major: 'Eb', minor: 'Cm', pc: 3, sig: -3 },
+    { major: 'Bb', minor: 'Gm', pc: 10, sig: -2 }, { major: 'F', minor: 'Dm', pc: 5, sig: -1 },
+  ];
+  const SHARP_ORDER = ['F#', 'C#', 'G#', 'D#', 'A#', 'E#'];
+  const FLAT_ORDER = ['Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb'];
+
+  /** Index on the circle of a key (minor keys sit with their relative major). */
+  function circleIndex(pcKey, minor) {
+    const majorPc = minor ? pc(pcKey + 3) : pc(pcKey);
+    return CIRCLE.findIndex((k) => k.pc === majorPc);
+  }
+
+  /** Key signature: number of sharps (> 0) or flats (< 0), and which notes. */
+  function keySignature(pcKey, minor) {
+    const sig = CIRCLE[circleIndex(pcKey, minor)].sig;
+    return { count: sig, notes: sig > 0 ? SHARP_ORDER.slice(0, sig) : FLAT_ORDER.slice(0, -sig) };
+  }
+
+  /** Whether a key is written with flats (so its notes and chords should be named with flats). */
+  const keyUsesFlats = (pcKey, minor) => CIRCLE[circleIndex(pcKey, minor)].sig < 0;
+
+  /** The seven chords built on each note of a major or natural minor key. */
+  function diatonicChords(pcKey, minor) {
+    const steps = minor ? SCALES.minor.steps : SCALES.major.steps;
+    const kinds = minor ? ['min', 'dim', 'maj', 'min', 'min', 'maj', 'maj'] : ['maj', 'min', 'min', 'maj', 'maj', 'min', 'dim'];
+    const romans = minor ? ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'] : ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
+    return steps.map((st, i) => ({ roman: romans[i], rootPc: pc(pcKey + st), chord: kinds[i] }));
+  }
+
   /** Every place on the neck where this exact pitch can be played: [{s, f}]. */
   function positionsOf(tuning, frets, midi) {
     return tuning.map((open, s) => ({ s, f: midi - open })).filter((p) => p.f >= 0 && p.f <= frets);
@@ -361,7 +397,7 @@
   }
 
   return {
-    SHARPS, FLATS, INTERVALS, SCALES, CHORDS, TUNINGS,
+    SHARPS, FLATS, INTERVALS, SCALES, CHORDS, TUNINGS, CIRCLE, circleIndex, keySignature, keyUsesFlats, diatonicChords,
     pc, noteName, noteNameWithOctave, intervalName, midiToFreq, freqToMidi,
     scalePcs, chordPcs, fretboard, buildRun, findVoicings, chordShapes, powerShapes, fingering, formatVoicing, positionsOf, guessPosition, scaleBox, scalePositions, scaleLesson, defaultPosition,
   };
